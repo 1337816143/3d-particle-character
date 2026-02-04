@@ -133,6 +133,7 @@
         const STATE = {
             mode: 'TREE', focusTarget: null, currentPhotoIndex: -1,
             currentThemeIndex: 0,
+            currentMusicIndex: 0,
             gestureDebounceTimer: 0,
             scatterScale: 1.0, gestureBaseSpread: null,
             hand: { detected: false, x: 0, y: 0 },
@@ -991,11 +992,40 @@
             if (!STATE.musicData || STATE.musicData.length === 0) return;
             console.log('Loading default music:', STATE.musicData.length);
             const audioEl = document.getElementById('bg-music');
-            const musicPath = STATE.musicData[0];
-            audioEl.src = musicPath;
-            audioEl.currentTime = 0;
-            audioEl.play().catch(console.warn);
-            console.log(`Loaded music: ${musicPath}`);
+            
+            function playNextMusic() {
+                const musicPath = STATE.musicData[STATE.currentMusicIndex];
+                console.log(`Playing music ${STATE.currentMusicIndex + 1}/${STATE.musicData.length}: ${musicPath}`);
+                audioEl.src = musicPath;
+                audioEl.currentTime = 0;
+                
+                const playPromise = audioEl.play();
+                if (playPromise !== undefined) {
+                    playPromise.then(() => {
+                        console.log('Music started playing successfully');
+                    }).catch(error => {
+                        console.warn('Failed to play music:', error);
+                        setTimeout(() => {
+                            STATE.currentMusicIndex = (STATE.currentMusicIndex + 1) % STATE.musicData.length;
+                            playNextMusic();
+                        }, 1000);
+                    });
+                }
+            }
+            
+            audioEl.addEventListener('ended', () => {
+                console.log('Music ended, playing next track');
+                STATE.currentMusicIndex = (STATE.currentMusicIndex + 1) % STATE.musicData.length;
+                playNextMusic();
+            });
+            
+            audioEl.addEventListener('error', (e) => {
+                console.warn('Audio error:', e);
+                STATE.currentMusicIndex = (STATE.currentMusicIndex + 1) % STATE.musicData.length;
+                setTimeout(() => playNextMusic(), 1000);
+            });
+            
+            playNextMusic();
         }
 
         async function init() {
