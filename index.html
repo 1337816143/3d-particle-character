@@ -323,7 +323,7 @@
                             console.log('模型尺寸:', size);
                             
                             const maxDim = Math.max(size.x, size.y, size.z);
-                            STATE.modelScale = 25.0 / maxDim;
+                            STATE.modelScale = 22.0 / maxDim;
                             console.log('模型缩放因子:', STATE.modelScale);
                             
                             vertices.forEach(v => {
@@ -1053,12 +1053,14 @@
             }
 
             const loader = document.getElementById('loader');
-            loader.style.opacity = 0;
-            setTimeout(() => {
-                if (loader && loader.parentNode) {
-                    loader.remove();
-                }
-            }, 1200);
+            if (loader) {
+                loader.style.opacity = 0;
+                setTimeout(() => {
+                    if (loader && loader.parentNode) {
+                        loader.remove();
+                    }
+                }, 1200);
+            }
 
             animate(); 
         }
