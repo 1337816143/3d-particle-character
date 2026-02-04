@@ -972,6 +972,32 @@
             };
         }
 
+        function loadDefaultPhotos() {
+            if (!STATE.photos || STATE.photos.length === 0) return;
+            console.log('Loading default photos:', STATE.photos.length);
+            STATE.photos.forEach((photoPath, index) => {
+                const loader = new THREE.TextureLoader();
+                loader.load(photoPath, (texture) => {
+                    texture.colorSpace = THREE.SRGBColorSpace;
+                    addPhotoToScene(texture);
+                    console.log(`Loaded photo ${index + 1}/${STATE.photos.length}: ${photoPath}`);
+                }, undefined, (error) => {
+                    console.warn(`Failed to load photo: ${photoPath}`, error);
+                });
+            });
+        }
+
+        function loadDefaultMusic() {
+            if (!STATE.musicData || STATE.musicData.length === 0) return;
+            console.log('Loading default music:', STATE.musicData.length);
+            const audioEl = document.getElementById('bg-music');
+            const musicPath = STATE.musicData[0];
+            audioEl.src = musicPath;
+            audioEl.currentTime = 0;
+            audioEl.play().catch(console.warn);
+            console.log(`Loaded music: ${musicPath}`);
+        }
+
         async function init() {
             try {
                 initThree();            
@@ -989,6 +1015,9 @@
                 setupLetterSystem(); 
                 
                 initMediaPipe().catch(console.warn);
+                
+                loadDefaultPhotos();
+                loadDefaultMusic();
             } catch (error) {
                 console.error('初始化失败:', error);
             }
