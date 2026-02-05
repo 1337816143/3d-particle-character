@@ -127,13 +127,30 @@
                 iceBlue: 0xaaddff, white: 0xffffff,
                 hologram: {
                     primary: 0x00ffff,
-                    secondary: 0x9900ff
+                    secondary: 0x9900ff,
+                    transition: 0x6600ff
                 }
             },
             particles: { 
                 count: 10000, dustCount: 4500, treeHeight: 28, treeRadius: 9,
-                snowCount: 2000, snowSpeed: 8,
-                hologramCount: 5000, hologramSize: 0.25
+                snowCount: 2000, snowSpeed: 8
+            },
+            hologram: {
+                count: 20000,
+                size: 0.2,
+                lerpSpeed: 4.5,
+                rotationSpeed: 0.15,
+                floatAmplitude: 0.1,
+                bloom: {
+                    threshold: 0.1,
+                    strength: 0.8,
+                    radius: 0.6
+                },
+                ambientLight: {
+                    color: 0x220044,
+                    intensity: 0.15
+                },
+                showPhoto: false
             },
             camera: { z: 44 },
             gestures: { palmOpenThreshold: 0.35, sensitivity: 6.0 }
@@ -250,11 +267,13 @@
         };
 
         let scene, camera, renderer, composer, clock = new THREE.Clock();
-        let mainGroup, starGroup, bgGroup, photoMeshGroup, particleSystem = []; 
+        let mainGroup, starGroup, bgGroup, photoMeshGroup, particleSystem = [];
+        let hologramParticleSystem = []; 
         let galaxySystem = null; 
         let snowSystem = null;
         let hologramSystem = null;
         let hologramBackgroundSystem = null;
+        let bloomPass = null;
 
         let handLandmarker, video, drawingUtils, canvasCtx;
         let caneTexture, snowTexture, matLib = {};
@@ -414,11 +433,11 @@
         }
 
         function setupPostProcessing() {
-            const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
-            bloom.threshold = 0.75; bloom.strength = 0.5; bloom.radius = 0.5;
+            bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
+            bloomPass.threshold = 0.75; bloomPass.strength = 0.5; bloomPass.radius = 0.5;
             composer = new EffectComposer(renderer);
             composer.addPass(new RenderPass(scene, camera));
-            composer.addPass(bloom);
+            composer.addPass(bloomPass);
         }
 
         function createFrostTexture() {
@@ -488,24 +507,16 @@
             matLib.dust = new THREE.MeshBasicMaterial({ color: 0xffffee, blending: THREE.AdditiveBlending });
             matLib.snowFlake = new THREE.PointsMaterial({ color: 0xffffff, size: 0.6, map: snowTexture, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false });
             
-            const hologramCanvas = document.createElement('canvas');
-            hologramCanvas.width = 64; hologramCanvas.height = 64;
-            const hCtx = hologramCanvas.getContext('2d');
-            const hGrad = hCtx.createRadialGradient(32, 32, 0, 32, 32, 32);
-            hGrad.addColorStop(0, 'rgba(255, 255, 255, 1)');
-            hGrad.addColorStop(0.3, 'rgba(0, 255, 255, 0.8)');
-            hGrad.addColorStop(0.6, 'rgba(153, 0, 255, 0.5)');
-            hGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-            hCtx.fillStyle = hGrad; hCtx.fillRect(0, 0, 64, 64);
-            const hologramTexture = new THREE.CanvasTexture(hologramCanvas);
-            matLib.hologram = new THREE.PointsMaterial({ 
-                color: CONFIG.colors.hologram.primary, 
-                size: CONFIG.particles.hologramSize, 
-                map: hologramTexture, 
-                transparent: true, 
-                opacity: 0.7, 
-                blending: THREE.AdditiveBlending, 
-                depthWrite: false 
+            matLib.hologram = new THREE.PointsMaterial({
+                color: CONFIG.colors.hologram.primary,
+                size: CONFIG.hologram.size,
+                transparent: true,
+                opacity: 0.65,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false,
+                emissive: CONFIG.colors.hologram.primary,
+                emissiveIntensity: 0.9,
+                vertexColors: true
             });
             matLib.frameHologram = new THREE.MeshBasicMaterial({ 
                 color: CONFIG.colors.hologram.primary, 
@@ -571,6 +582,53 @@
                     const flicker = 0.7 + Math.sin(time * 3 + this.offset) * 0.3;
                     this.mesh.material.emissive.copy(this.baseEmissive).multiplyScalar(flicker);
                 }
+            }
+        }
+
+        class HologramParticle {
+            constructor(position, color, offset) {
+                this.position = position.clone();
+                this.color = color.clone();
+                this.offset = offset;
+                this.rotation = new THREE.Euler(
+                    Math.random() * Math.PI * 2,
+                    Math.random() * Math.PI * 2,
+                    Math.random() * Math.PI * 2
+                );
+                this.basePosition = position.clone();
+                this.scatterPosition = new THREE.Vector3();
+                this.calculateScatterPosition();
+            }
+
+            calculateScatterPosition() {
+                const r = 10 + Math.random() * 15;
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.acos(2 * Math.random() - 1);
+                this.scatterPosition.set(
+                    r * Math.sin(phi) * Math.cos(theta),
+                    r * Math.sin(phi) * Math.sin(theta),
+                    r * Math.cos(phi)
+                );
+            }
+
+            update(dt, time, mode, scatterScale) {
+                let target, lerpSpeed = CONFIG.hologram.lerpSpeed;
+                
+                if (mode === 'SCATTER') {
+                    target = this.scatterPosition.clone().multiplyScalar(scatterScale);
+                } else if (mode === 'LETTER') {
+                    target = this.scatterPosition;
+                } else {
+                    target = this.basePosition.clone();
+                }
+
+                if (mode === 'TREE') {
+                    target.y += Math.sin(time * 2 + this.offset) * CONFIG.hologram.floatAmplitude;
+                }
+
+                this.position.lerp(target, lerpSpeed * dt);
+                this.rotation.x += dt * CONFIG.hologram.rotationSpeed;
+                this.rotation.y += dt * CONFIG.hologram.rotationSpeed;
             }
         }
 
@@ -688,13 +746,23 @@
                 mainGroup.add(mesh); particleSystem.push(new Particle(mesh, 'DUST', true));
             }
 
-            const hologramGeometry = new THREE.BufferGeometry();
-            const hologramPositions = new Float32Array(CONFIG.particles.hologramCount * 3);
-            const hologramColors = new Float32Array(CONFIG.particles.hologramCount * 3);
+            await createHologramParticleSystem();
+            
+            console.log('粒子系统创建完成，总粒子数:', particleSystem.length);
+            console.log('========== 粒子系统创建完成 ==========');
+        }
+
+        async function createHologramParticleSystem() {
+            console.log('========== 开始创建全息粒子系统 ==========');
+            
+            const geometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(CONFIG.hologram.count * 3);
+            const colors = new Float32Array(CONFIG.hologram.count * 3);
             const color1 = new THREE.Color(CONFIG.colors.hologram.primary);
             const color2 = new THREE.Color(CONFIG.colors.hologram.secondary);
+            const color3 = new THREE.Color(CONFIG.colors.hologram.transition);
 
-            for (let i = 0; i < CONFIG.particles.hologramCount; i++) {
+            for (let i = 0; i < CONFIG.hologram.count; i++) {
                 let vertex;
                 if (STATE.modelVertices && STATE.modelVertices.length > 0) {
                     const vertexIndex = Math.floor(Math.random() * STATE.modelVertices.length);
@@ -708,27 +776,38 @@
                     const r = Math.max(0.5, CONFIG.particles.treeRadius * (1.0 - t)) * Math.sqrt(Math.random());
                     vertex = new THREE.Vector3(Math.cos(angle) * r, y, Math.sin(angle) * r);
                 }
-                hologramPositions[i * 3] = vertex.x;
-                hologramPositions[i * 3 + 1] = vertex.y;
-                hologramPositions[i * 3 + 2] = vertex.z;
 
-                const mixRatio = Math.random();
-                const mixedColor = color1.clone().lerp(color2, mixRatio);
-                hologramColors[i * 3] = mixedColor.r;
-                hologramColors[i * 3 + 1] = mixedColor.g;
-                hologramColors[i * 3 + 2] = mixedColor.b;
+                positions[i * 3] = vertex.x;
+                positions[i * 3 + 1] = vertex.y;
+                positions[i * 3 + 2] = vertex.z;
+
+                const rand = Math.random();
+                let color;
+                if (rand < 0.5) {
+                    color = color1.clone();
+                } else if (rand < 0.85) {
+                    color = color2.clone();
+                } else {
+                    color = color3.clone();
+                }
+
+                colors[i * 3] = color.r;
+                colors[i * 3 + 1] = color.g;
+                colors[i * 3 + 2] = color.b;
+
+                const hologramParticle = new HologramParticle(vertex, color, i);
+                hologramParticleSystem.push(hologramParticle);
             }
 
-            hologramGeometry.setAttribute('position', new THREE.BufferAttribute(hologramPositions, 3));
-            hologramGeometry.setAttribute('color', new THREE.BufferAttribute(hologramColors, 3));
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
-            hologramSystem = new THREE.Points(hologramGeometry, matLib.hologram);
+            hologramSystem = new THREE.Points(geometry, matLib.hologram);
             hologramSystem.visible = false;
             mainGroup.add(hologramSystem);
             
-            console.log('粒子系统创建完成，总粒子数:', particleSystem.length);
-            console.log('全息粒子系统创建完成，全息粒子数:', CONFIG.particles.hologramCount);
-            console.log('========== 粒子系统创建完成 ==========');
+            console.log('全息粒子系统创建完成，全息粒子数:', CONFIG.hologram.count);
+            console.log('========== 全息粒子系统创建完成 ==========');
         }
 
         function switchTheme(themeIndex) {
@@ -750,65 +829,82 @@
             if (hologramSystem) hologramSystem.visible = isHologram;
             if (hologramBackgroundSystem) hologramBackgroundSystem.visible = isHologram;
 
-            particleSystem.forEach(p => {
-                if (p.isDust) return;
+            if (isHologram) {
+                particleSystem.forEach(p => {
+                    p.mesh.visible = false;
+                });
+                hologramSystem.visible = true;
+            } else {
+                particleSystem.forEach(p => {
+                    p.mesh.visible = true;
+                });
+                hologramSystem.visible = false;
                 
-                if (p.type === 'PHOTO') {
-                    const group = p.mesh;
-                    if (group.children[0]) {
-                        if (isGold) group.children[0].material = matLib.frameGold;
-                        else if (isIce) group.children[0].material = matLib.ice;
-                        else if (isHologram) group.children[0].material = matLib.frameHologram;
-                    }
-                    if (group.children[1]) {
-                        if (isHologram) {
-                            group.children[1].material.transparent = true;
-                            group.children[1].material.opacity = 0.5;
-                            group.children[1].material.color.setHex(CONFIG.colors.hologram.primary);
-                        } else {
+                particleSystem.forEach(p => {
+                    if (p.isDust) return;
+                    
+                    if (p.type === 'PHOTO') {
+                        const group = p.mesh;
+                        if (group.children[0]) {
+                            if (isGold) group.children[0].material = matLib.frameGold;
+                            else if (isIce) group.children[0].material = matLib.ice;
+                        }
+                        if (group.children[1]) {
                             group.children[1].material.transparent = false;
                             group.children[1].material.opacity = 1.0;
                             group.children[1].material.color.setHex(0xffffff);
                         }
+                        if (group.children[2]) group.children[2].visible = !isGold;
+                        return;
                     }
-                    if (group.children[2]) group.children[2].visible = !isGold && !isHologram;
-                    return;
-                }
 
-                let newMat;
-                if (isGold) {
-                    if(p.type.includes('GOLD')) newMat = matLib.gold;
-                    else if(p.type === 'BOX') newMat = matLib.green;
-                    else if(p.type === 'RED') newMat = matLib.red;
-                    else if(p.type === 'CANE') newMat = matLib.candy;
-                } else if (isIce) {
-                    if(p.type.includes('GOLD') || p.type === 'BOX') newMat = matLib.ice; 
-                    else if(p.type === 'RED') newMat = matLib.snow;  
-                    else if(p.type === 'CANE') newMat = matLib.ice; 
-                }
-                if (newMat) p.mesh.material = newMat;
-            });
+                    let newMat;
+                    if (isGold) {
+                        if(p.type.includes('GOLD')) newMat = matLib.gold;
+                        else if(p.type === 'BOX') newMat = matLib.green;
+                        else if(p.type === 'RED') newMat = matLib.red;
+                        else if(p.type === 'CANE') newMat = matLib.candy;
+                    } else if (isIce) {
+                        if(p.type.includes('GOLD') || p.type === 'BOX') newMat = matLib.ice; 
+                        else if(p.type === 'RED') newMat = matLib.snow;  
+                        else if(p.type === 'CANE') newMat = matLib.ice; 
+                    }
+                    if (newMat) p.mesh.material = newMat;
+                });
+            }
 
             if (isHologram) {
                 scene.background = new THREE.Color(CONFIG.colors.bg);
                 scene.traverse(obj => {
                     if (obj.isLight && obj.type === 'AmbientLight') {
-                        obj.intensity = 0.1;
+                        obj.color.setHex(CONFIG.hologram.ambientLight.color);
+                        obj.intensity = CONFIG.hologram.ambientLight.intensity;
                     } else if (obj.isLight) {
                         obj.visible = false;
                     }
                 });
+                if (bloomPass) {
+                    bloomPass.threshold = CONFIG.hologram.bloom.threshold;
+                    bloomPass.strength = CONFIG.hologram.bloom.strength;
+                    bloomPass.radius = CONFIG.hologram.bloom.radius;
+                }
             } else {
                 scene.background = new THREE.Color(CONFIG.colors.bg);
                 scene.traverse(obj => {
                     if (obj.isLight) {
                         if (obj.type === 'AmbientLight') {
+                            obj.color.setHex(0xffffff);
                             obj.intensity = 0.2;
                         } else {
                             obj.visible = true;
                         }
                     }
                 });
+                if (bloomPass) {
+                    bloomPass.threshold = 0.75;
+                    bloomPass.strength = 0.5;
+                    bloomPass.radius = 0.5;
+                }
             }
         }
 
@@ -1074,28 +1170,26 @@
                 bgGroup.rotation.y -= 0.02 * dt; 
             } else if (hologramSystem && hologramSystem.visible) {
                 const positions = hologramSystem.geometry.attributes.position.array;
-                const colors = hologramSystem.geometry.attributes.color.array;
-                const count = CONFIG.particles.hologramCount;
+                const count = CONFIG.hologram.count;
                 const time = STATE.time;
 
-                for(let i = 0; i < count; i++) {
-                    const offset = i * 0.1;
-                    positions[i*3] += Math.sin(time * 2 + offset) * 0.001;
-                    positions[i*3+1] += Math.cos(time * 1.5 + offset) * 0.001;
-                    positions[i*3+2] += Math.sin(time * 1.8 + offset) * 0.001;
-
-                    const pulse = 0.5 + Math.sin(time * 3 + offset) * 0.5;
-                    colors[i*3] *= (1 + (pulse - 0.5) * 0.02);
-                    colors[i*3+1] *= (1 + (pulse - 0.5) * 0.02);
-                    colors[i*3+2] *= (1 + (pulse - 0.5) * 0.02);
+                for (let i = 0; i < hologramParticleSystem.length; i++) {
+                    const particle = hologramParticleSystem[i];
+                    particle.update(dt, time, STATE.mode, STATE.scatterScale);
+                    
+                    positions[i * 3] = particle.position.x;
+                    positions[i * 3 + 1] = particle.position.y;
+                    positions[i * 3 + 2] = particle.position.z;
                 }
                 hologramSystem.geometry.attributes.position.needsUpdate = true;
-                hologramSystem.geometry.attributes.color.needsUpdate = true;
                 hologramSystem.rotation.y -= 0.3 * dt;
-                bgGroup.rotation.y -= 0.05 * dt;
             }
 
-            particleSystem.forEach(p => p.update(dt, STATE.time, STATE.mode, STATE.focusTarget, (STATE.mode === 'FOCUS' ? _invMatrix : null)));
+            if (STATE.currentThemeIndex === 2) {
+                hologramParticleSystem.forEach(p => p.update(dt, STATE.time, STATE.mode, STATE.scatterScale));
+            } else {
+                particleSystem.forEach(p => p.update(dt, STATE.time, STATE.mode, STATE.focusTarget, (STATE.mode === 'FOCUS' ? _invMatrix : null)));
+            }
             composer.render();
         }
 
