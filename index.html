@@ -13,6 +13,10 @@
         
         #ui-layer { position: absolute; width: 100%; height: 100%; z-index: 10; pointer-events: none; background: radial-gradient(circle at center, transparent 0%, rgba(0,0,0,0.3) 100%); }
         
+        body.hologram-theme #ui-layer {
+            background: radial-gradient(circle at center, rgba(0, 255, 255, 0.05) 0%, rgba(153, 0, 255, 0.02) 50%, transparent 100%);
+        }
+        
         #loader { position: absolute; width: 100%; height: 100%; background: #000; z-index: 100; display: flex; align-items: center; justify-content: center; transition: opacity 1.2s; pointer-events: none; flex-direction: column; gap: 20px; }
         .spinner { width: 40px; height: 40px; border: 2px solid rgba(212, 175, 55, 0.1); border-top: 2px solid #d4af37; border-radius: 50%; animation: spin 1s linear infinite; }
         @keyframes spin { 100% { transform: rotate(360deg); } }
@@ -120,11 +124,16 @@
         const CONFIG = {
             colors: {
                 bg: 0x020205, gold: 0xffd700, red: 0x880000, green: 0x004400,
-                iceBlue: 0xaaddff, white: 0xffffff 
+                iceBlue: 0xaaddff, white: 0xffffff,
+                hologram: {
+                    primary: 0x00ffff,
+                    secondary: 0x9900ff
+                }
             },
             particles: { 
                 count: 10000, dustCount: 4500, treeHeight: 28, treeRadius: 9,
-                snowCount: 2000, snowSpeed: 8 
+                snowCount: 2000, snowSpeed: 8,
+                hologramCount: 5000, hologramSize: 0.25
             },
             camera: { z: 44 },
             gestures: { palmOpenThreshold: 0.35, sensitivity: 6.0 }
@@ -476,6 +485,32 @@
             matLib.frameIce = matLib.ice;
             matLib.dust = new THREE.MeshBasicMaterial({ color: 0xffffee, blending: THREE.AdditiveBlending });
             matLib.snowFlake = new THREE.PointsMaterial({ color: 0xffffff, size: 0.6, map: snowTexture, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false });
+            
+            const hologramCanvas = document.createElement('canvas');
+            hologramCanvas.width = 64; hologramCanvas.height = 64;
+            const hCtx = hologramCanvas.getContext('2d');
+            const hGrad = hCtx.createRadialGradient(32, 32, 0, 32, 32, 32);
+            hGrad.addColorStop(0, 'rgba(255, 255, 255, 1)');
+            hGrad.addColorStop(0.3, 'rgba(0, 255, 255, 0.8)');
+            hGrad.addColorStop(0.6, 'rgba(153, 0, 255, 0.5)');
+            hGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+            hCtx.fillStyle = hGrad; hCtx.fillRect(0, 0, 64, 64);
+            const hologramTexture = new THREE.CanvasTexture(hologramCanvas);
+            matLib.hologram = new THREE.PointsMaterial({ 
+                color: CONFIG.colors.hologram.primary, 
+                size: CONFIG.particles.hologramSize, 
+                map: hologramTexture, 
+                transparent: true, 
+                opacity: 0.7, 
+                blending: THREE.AdditiveBlending, 
+                depthWrite: false 
+            });
+            matLib.frameHologram = new THREE.MeshBasicMaterial({ 
+                color: CONFIG.colors.hologram.primary, 
+                transparent: true, 
+                opacity: 0.5,
+                side: THREE.DoubleSide
+            });
         }
 
         class Particle {
@@ -569,6 +604,45 @@
             bgGroup.add(snowSystem);
         }
 
+        function createHologramBackground() {
+            const geometry = new THREE.BufferGeometry();
+            const pos = [], colors = [];
+            const color1 = new THREE.Color(CONFIG.colors.hologram.primary);
+            const color2 = new THREE.Color(CONFIG.colors.hologram.secondary);
+
+            for (let i = 0; i < 2000; i++) {
+                const r = 30 + Math.random() * 70;
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.acos(2 * Math.random() - 1);
+                
+                pos.push(
+                    r * Math.sin(phi) * Math.cos(theta),
+                    r * Math.sin(phi) * Math.sin(theta),
+                    r * Math.cos(phi)
+                );
+
+                const mixRatio = Math.random();
+                const mixedColor = color1.clone().lerp(color2, mixRatio);
+                colors.push(mixedColor.r, mixedColor.g, mixedColor.b);
+            }
+
+            geometry.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+            geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+
+            const material = new THREE.PointsMaterial({
+                size: 0.5,
+                vertexColors: true,
+                blending: THREE.AdditiveBlending,
+                transparent: true,
+                opacity: 0.3,
+                depthWrite: false
+            });
+
+            hologramBackgroundSystem = new THREE.Points(geometry, material);
+            hologramBackgroundSystem.visible = false;
+            bgGroup.add(hologramBackgroundSystem);
+        }
+
         async function createParticles() {
             console.log('========== 开始创建粒子系统 ==========');
             
@@ -611,26 +685,80 @@
                 const mesh = new THREE.Mesh(dustGeo, matLib.dust); mesh.scale.setScalar(0.5 + Math.random());
                 mainGroup.add(mesh); particleSystem.push(new Particle(mesh, 'DUST', true));
             }
+
+            const hologramGeometry = new THREE.BufferGeometry();
+            const hologramPositions = new Float32Array(CONFIG.particles.hologramCount * 3);
+            const hologramColors = new Float32Array(CONFIG.particles.hologramCount * 3);
+            const color1 = new THREE.Color(CONFIG.colors.hologram.primary);
+            const color2 = new THREE.Color(CONFIG.colors.hologram.secondary);
+
+            for (let i = 0; i < CONFIG.particles.hologramCount; i++) {
+                const vertexIndex = Math.floor(Math.random() * STATE.modelVertices.length);
+                const vertex = STATE.modelVertices[vertexIndex];
+                hologramPositions[i * 3] = vertex.x;
+                hologramPositions[i * 3 + 1] = vertex.y;
+                hologramPositions[i * 3 + 2] = vertex.z;
+
+                const mixRatio = Math.random();
+                const mixedColor = color1.clone().lerp(color2, mixRatio);
+                hologramColors[i * 3] = mixedColor.r;
+                hologramColors[i * 3 + 1] = mixedColor.g;
+                hologramColors[i * 3 + 2] = mixedColor.b;
+            }
+
+            hologramGeometry.setAttribute('position', new THREE.BufferAttribute(hologramPositions, 3));
+            hologramGeometry.setAttribute('color', new THREE.BufferAttribute(hologramColors, 3));
+
+            hologramSystem = new THREE.Points(hologramGeometry, matLib.hologram);
+            hologramSystem.visible = false;
+            mainGroup.add(hologramSystem);
             
             console.log('粒子系统创建完成，总粒子数:', particleSystem.length);
+            console.log('全息粒子系统创建完成，全息粒子数:', CONFIG.particles.hologramCount);
             console.log('========== 粒子系统创建完成 ==========');
         }
 
         function switchTheme(themeIndex) {
             STATE.currentThemeIndex = themeIndex;
-            renderer.toneMappingExposure = (themeIndex === 1) ? 0.6 : 1.0;
             const isGold = (themeIndex === 0);
+            const isIce = (themeIndex === 1);
+            const isHologram = (themeIndex === 2);
+
+            if (isHologram) {
+                document.body.classList.add('hologram-theme');
+            } else {
+                document.body.classList.remove('hologram-theme');
+            }
+
+            renderer.toneMappingExposure = isIce ? 0.6 : 1.0;
 
             if (galaxySystem) galaxySystem.visible = isGold;
-            if (snowSystem) snowSystem.visible = !isGold;
+            if (snowSystem) snowSystem.visible = isIce;
+            if (hologramSystem) hologramSystem.visible = isHologram;
+            if (hologramBackgroundSystem) hologramBackgroundSystem.visible = isHologram;
 
             particleSystem.forEach(p => {
                 if (p.isDust) return;
                 
                 if (p.type === 'PHOTO') {
                     const group = p.mesh;
-                    if (group.children[0]) group.children[0].material = isGold ? matLib.frameGold : matLib.ice;
-                    if (group.children[2]) group.children[2].visible = !isGold;
+                    if (group.children[0]) {
+                        if (isGold) group.children[0].material = matLib.frameGold;
+                        else if (isIce) group.children[0].material = matLib.ice;
+                        else if (isHologram) group.children[0].material = matLib.frameHologram;
+                    }
+                    if (group.children[1]) {
+                        if (isHologram) {
+                            group.children[1].material.transparent = true;
+                            group.children[1].material.opacity = 0.5;
+                            group.children[1].material.color.setHex(CONFIG.colors.hologram.primary);
+                        } else {
+                            group.children[1].material.transparent = false;
+                            group.children[1].material.opacity = 1.0;
+                            group.children[1].material.color.setHex(0xffffff);
+                        }
+                    }
+                    if (group.children[2]) group.children[2].visible = !isGold && !isHologram;
                     return;
                 }
 
@@ -640,13 +768,35 @@
                     else if(p.type === 'BOX') newMat = matLib.green;
                     else if(p.type === 'RED') newMat = matLib.red;
                     else if(p.type === 'CANE') newMat = matLib.candy;
-                } else {
+                } else if (isIce) {
                     if(p.type.includes('GOLD') || p.type === 'BOX') newMat = matLib.ice; 
                     else if(p.type === 'RED') newMat = matLib.snow;  
                     else if(p.type === 'CANE') newMat = matLib.ice; 
                 }
                 if (newMat) p.mesh.material = newMat;
             });
+
+            if (isHologram) {
+                scene.background = new THREE.Color(CONFIG.colors.bg);
+                scene.traverse(obj => {
+                    if (obj.isLight && obj.type === 'AmbientLight') {
+                        obj.intensity = 0.1;
+                    } else if (obj.isLight) {
+                        obj.visible = false;
+                    }
+                });
+            } else {
+                scene.background = new THREE.Color(CONFIG.colors.bg);
+                scene.traverse(obj => {
+                    if (obj.isLight) {
+                        if (obj.type === 'AmbientLight') {
+                            obj.intensity = 0.2;
+                        } else {
+                            obj.visible = true;
+                        }
+                    }
+                });
+            }
         }
 
         function addPhotoToScene(texture) {
@@ -838,7 +988,7 @@
 
             if (isVHigh && isOthersLow && isSpread) {
                 if (Date.now() - STATE.gestureDebounceTimer > 2000) { 
-                    switchTheme((STATE.currentThemeIndex + 1) % 2); 
+                    switchTheme((STATE.currentThemeIndex + 1) % 3); 
                     STATE.gestureDebounceTimer = Date.now(); 
                 }
             }
@@ -909,6 +1059,27 @@
                 }
                 snowSystem.geometry.attributes.position.needsUpdate = true;
                 bgGroup.rotation.y -= 0.02 * dt; 
+            } else if (hologramSystem && hologramSystem.visible) {
+                const positions = hologramSystem.geometry.attributes.position.array;
+                const colors = hologramSystem.geometry.attributes.color.array;
+                const count = CONFIG.particles.hologramCount;
+                const time = STATE.time;
+
+                for(let i = 0; i < count; i++) {
+                    const offset = i * 0.1;
+                    positions[i*3] += Math.sin(time * 2 + offset) * 0.001;
+                    positions[i*3+1] += Math.cos(time * 1.5 + offset) * 0.001;
+                    positions[i*3+2] += Math.sin(time * 1.8 + offset) * 0.001;
+
+                    const pulse = 0.5 + Math.sin(time * 3 + offset) * 0.5;
+                    colors[i*3] *= (1 + (pulse - 0.5) * 0.02);
+                    colors[i*3+1] *= (1 + (pulse - 0.5) * 0.02);
+                    colors[i*3+2] *= (1 + (pulse - 0.5) * 0.02);
+                }
+                hologramSystem.geometry.attributes.position.needsUpdate = true;
+                hologramSystem.geometry.attributes.color.needsUpdate = true;
+                hologramSystem.rotation.y -= 0.3 * dt;
+                bgGroup.rotation.y -= 0.05 * dt;
             }
 
             particleSystem.forEach(p => p.update(dt, STATE.time, STATE.mode, STATE.focusTarget, (STATE.mode === 'FOCUS' ? _invMatrix : null)));
@@ -1037,7 +1208,8 @@
                 createMaterials(); 
                 
                 createGalaxyBackground(); 
-                createSnowBackground();     
+                createSnowBackground();
+                createHologramBackground();     
                 
                 await createParticles();      
                 setupPostProcessing();
