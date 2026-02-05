@@ -253,6 +253,8 @@
         let mainGroup, starGroup, bgGroup, photoMeshGroup, particleSystem = []; 
         let galaxySystem = null; 
         let snowSystem = null;
+        let hologramSystem = null;
+        let hologramBackgroundSystem = null;
 
         let handLandmarker, video, drawingUtils, canvasCtx;
         let caneTexture, snowTexture, matLib = {};
@@ -693,8 +695,19 @@
             const color2 = new THREE.Color(CONFIG.colors.hologram.secondary);
 
             for (let i = 0; i < CONFIG.particles.hologramCount; i++) {
-                const vertexIndex = Math.floor(Math.random() * STATE.modelVertices.length);
-                const vertex = STATE.modelVertices[vertexIndex];
+                let vertex;
+                if (STATE.modelVertices && STATE.modelVertices.length > 0) {
+                    const vertexIndex = Math.floor(Math.random() * STATE.modelVertices.length);
+                    vertex = STATE.modelVertices[vertexIndex];
+                } else {
+                    const h = CONFIG.particles.treeHeight;
+                    let t = Math.random();
+                    t = Math.pow(t, 0.8);
+                    const y = (t * h) - h/2;
+                    const angle = Math.random() * Math.PI * 2;
+                    const r = Math.max(0.5, CONFIG.particles.treeRadius * (1.0 - t)) * Math.sqrt(Math.random());
+                    vertex = new THREE.Vector3(Math.cos(angle) * r, y, Math.sin(angle) * r);
+                }
                 hologramPositions[i * 3] = vertex.x;
                 hologramPositions[i * 3 + 1] = vertex.y;
                 hologramPositions[i * 3 + 2] = vertex.z;
