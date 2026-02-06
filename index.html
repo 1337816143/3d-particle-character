@@ -868,20 +868,20 @@
                     const photoIndex = row * cols + col;
                     if (photoIndex >= photoCount) break;
                     
-                    const aspect = photos[photoIndex].width / photos[photoIndex].height;
-                    let displayW, displayH;
-                    if (aspect >= 1) {
-                        displayW = photoWidth;
-                        displayH = photoWidth / aspect;
-                    } else {
-                        displayH = photoHeight;
-                        displayW = photoHeight * aspect;
-                    }
-                    
                     const loader = new THREE.TextureLoader();
                     await new Promise((resolve) => {
-                        loader.load(photos[photoIndex].src, (texture) => {
+                        loader.load(photos[photoIndex], (texture) => {
                             texture.colorSpace = THREE.SRGBColorSpace;
+                            
+                            const aspect = texture.image.width / texture.image.height;
+                            let displayW, displayH;
+                            if (aspect >= 1) {
+                                displayW = photoWidth;
+                                displayH = photoWidth / aspect;
+                            } else {
+                                displayH = photoHeight;
+                                displayW = photoHeight * aspect;
+                            }
                             
                             const group = new THREE.Group();
                             
@@ -920,7 +920,7 @@
                             group.userData = {
                                 originalPosition: new THREE.Vector3(xPos, yPos, -screenConfig.depth - 0.1),
                                 index: photoIndex,
-                                photoSrc: photos[photoIndex].src
+                                photoSrc: photos[photoIndex]
                             };
                             
                             hologramPhotoCylinderGroup.add(group);
