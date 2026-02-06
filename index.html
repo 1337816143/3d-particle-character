@@ -877,14 +877,16 @@
             
             const photoWidth = wallConfig.photoWidth;
             const photoHeight = wallConfig.photoHeight;
-            const photoSpacing = photoWidth * 0.2;
             
-            const arcPerPhoto = (photoWidth + photoSpacing) / wallConfig.radius;
+            const arcPerPhoto = photoWidth / wallConfig.radius;
             const photosPerRow = Math.floor(wallConfig.arcAngle / arcPerPhoto);
             const totalRows = Math.min(Math.ceil(photoCount / photosPerRow), wallConfig.maxRows);
-            const rowHeight = (photoHeight + photoSpacing);
+            const rowHeight = photoHeight * 1.2;
             const totalHeight = totalRows * rowHeight;
             const startRowY = -totalHeight / 2 + rowHeight / 2;
+            
+            const maxPhotos = totalRows * photosPerRow;
+            const photoCountToCreate = Math.min(photoCount, maxPhotos);
             
             STATE.hologramPhotoWall = {
                 photos: [],
@@ -893,7 +895,7 @@
                 wallConfig: wallConfig
             };
             
-            for (let i = 0; i < photoCount; i++) {
+            for (let i = 0; i < photoCountToCreate; i++) {
                 const row = Math.floor(i / photosPerRow);
                 const col = i % photosPerRow;
                 const loader = new THREE.TextureLoader();
@@ -914,7 +916,7 @@
                         const frameMat = new THREE.MeshBasicMaterial({
                             color: frameColor,
                             transparent: true,
-                            opacity: frameOpacity,
+                            opacity: 0.15,
                             side: THREE.DoubleSide,
                             depthWrite: false,
                             depthTest: true
