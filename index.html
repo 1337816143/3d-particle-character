@@ -155,7 +155,7 @@
                     radius: 43.2,
                     rows: 3,
                     photoSize: { width: 9, height: 9 },
-                    rowSpacing: 8.0,
+                    rowSpacing: 12.0,
                     rotationSpeed: 0.015,
                     frameColor: 0xffffff,
                     frameWidth: 0.06,
@@ -874,7 +874,8 @@
                         index: photoIndex,
                         photoSrc: photos[photoIndex],
                         rowIndex: row,
-                        angle: angle
+                        angle: angle,
+                        baseAngle: angle
                     };
                     
                     rowGroup.add(group);
@@ -919,7 +920,6 @@
                     });
                     const frame = new THREE.Mesh(frameGeo, frameMat);
                     frame.renderOrder = 1;
-                    frame.rotation.z = Math.PI / 2;
                     group.add(frame);
                     
                     const photoMat = new THREE.MeshBasicMaterial({ 
@@ -933,7 +933,6 @@
                     const photo = new THREE.Mesh(new THREE.PlaneGeometry(photoW, photoH), photoMat);
                     photo.position.z = 0.04;
                     photo.renderOrder = 2;
-                    photo.rotation.z = Math.PI / 2;
                     group.add(photo);
                     
                     resolve(group);
@@ -1341,12 +1340,16 @@
                     
                     hologramPhotoCylinderGroup.children.forEach(rowGroup => {
                         rowGroup.children.forEach(photoGroup => {
+                            const currentAngle = photoGroup.userData.baseAngle + rowGroup.rotation.y;
+                            const normalizedAngle = ((currentAngle % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+                            const isInFrontHalf = normalizedAngle >= 0 && normalizedAngle <= Math.PI;
+                            
                             if (STATE.mode === 'FOCUS' && STATE.focusTarget === photoGroup) {
+                                photoGroup.visible = true;
                                 const targetPos = new THREE.Vector3(0, 0, 8);
                                 photoGroup.position.lerp(targetPos, 6.0 * dt);
                                 photoGroup.scale.lerp(new THREE.Vector3(2.5, 2.5, 2.5), 6.0 * dt);
                                 photoGroup.lookAt(0, 0, 20);
-                                photoGroup.rotation.z = Math.PI / 2;
                                 
                                 if (photoGroup.children[0]) {
                                     photoGroup.children[0].material.opacity = THREE.MathUtils.lerp(photoGroup.children[0].material.opacity, 0.9, 6.0 * dt);
@@ -1355,13 +1358,13 @@
                                     photoGroup.children[1].material.opacity = THREE.MathUtils.lerp(photoGroup.children[1].material.opacity, 1.0, 6.0 * dt);
                                 }
                             } else {
+                                photoGroup.visible = isInFrontHalf;
                                 const originalPos = photoGroup.userData.originalPosition.clone();
                                 const currentRotation = rowGroup.rotation.y;
                                 originalPos.applyAxisAngle(new THREE.Vector3(0, 1, 0), currentRotation);
                                 photoGroup.position.lerp(originalPos, 6.0 * dt);
                                 photoGroup.scale.lerp(new THREE.Vector3(1, 1, 1), 6.0 * dt);
                                 photoGroup.lookAt(0, photoGroup.position.y, 0);
-                                photoGroup.rotation.z = Math.PI / 2;
                                 
                                 if (STATE.mode === 'FOCUS') {
                                     if (photoGroup.children[0]) {
