@@ -1422,13 +1422,6 @@
                         STATE.focusTarget.position.lerp(targetPos, 6.0 * dt);
                         STATE.focusTarget.scale.lerp(new THREE.Vector3(2.5, 2.5, 2.5), 6.0 * dt);
                         STATE.focusTarget.lookAt(0, 0, 20);
-                        
-                        if (STATE.focusTarget.children[0]) {
-                            STATE.focusTarget.children[0].material.opacity = THREE.MathUtils.lerp(STATE.focusTarget.children[0].material.opacity, 0.9, 6.0 * dt);
-                        }
-                        if (STATE.focusTarget.children[1]) {
-                            STATE.focusTarget.children[1].material.opacity = THREE.MathUtils.lerp(STATE.focusTarget.children[1].material.opacity, 1.0, 6.0 * dt);
-                        }
                     } else {
                         wall.isScrolling = true;
                         
@@ -1456,13 +1449,6 @@
                             photoGroup.lookAt(0, userData.originalY, 0);
                             photoGroup.scale.set(1, 1, 1);
                             photoGroup.visible = true;
-                            
-                            if (photoGroup.children[0]) {
-                                photoGroup.children[0].material.opacity = 0.5;
-                            }
-                            if (photoGroup.children[1]) {
-                                photoGroup.children[1].material.opacity = 1.0;
-                            }
                         });
                     }
                 }
