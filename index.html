@@ -846,6 +846,7 @@
             
             const photosPerRow = Math.ceil(photoCount / rows);
             const angleStep = (Math.PI * 2) / photosPerRow;
+            const rowAngleOffset = angleStep / 2;
             
             for (let row = 0; row < rows; row++) {
                 const rowGroup = new THREE.Group();
@@ -856,12 +857,13 @@
                 };
                 
                 const startY = ((rows - 1) * rowSpacing) / 2 - row * rowSpacing;
+                const startAngleOffset = row * rowAngleOffset;
                 
                 for (let i = 0; i < photosPerRow; i++) {
                     const photoIndex = row * photosPerRow + i;
                     if (photoIndex >= photoCount) break;
                     
-                    const angle = i * angleStep;
+                    const angle = i * angleStep + startAngleOffset;
                     const x = Math.cos(angle) * radius;
                     const z = Math.sin(angle) * radius;
                     
@@ -1342,7 +1344,7 @@
                         rowGroup.children.forEach(photoGroup => {
                             const currentAngle = photoGroup.userData.baseAngle + rowGroup.rotation.y;
                             const normalizedAngle = ((currentAngle % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
-                            const isInFrontHalf = normalizedAngle >= 0 && normalizedAngle <= Math.PI;
+                            const isInBackHalf = normalizedAngle >= Math.PI && normalizedAngle <= Math.PI * 2;
                             
                             if (STATE.mode === 'FOCUS' && STATE.focusTarget === photoGroup) {
                                 photoGroup.visible = true;
@@ -1358,7 +1360,7 @@
                                     photoGroup.children[1].material.opacity = THREE.MathUtils.lerp(photoGroup.children[1].material.opacity, 1.0, 6.0 * dt);
                                 }
                             } else {
-                                photoGroup.visible = isInFrontHalf;
+                                photoGroup.visible = isInBackHalf;
                                 const originalPos = photoGroup.userData.originalPosition.clone();
                                 const currentRotation = rowGroup.rotation.y;
                                 originalPos.applyAxisAngle(new THREE.Vector3(0, 1, 0), currentRotation);
