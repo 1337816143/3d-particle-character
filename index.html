@@ -862,15 +862,16 @@
                 wallConfig.arcAngle
             );
             const curvedWallMat = new THREE.MeshBasicMaterial({
-                color: 0x0a0a1a,
+                color: 0x000000,
                 transparent: true,
-                opacity: 0.2,
-                side: THREE.BackSide
+                opacity: 0.0,
+                side: THREE.FrontSide
             });
             const curvedWall = new THREE.Mesh(curvedWallGeo, curvedWallMat);
             curvedWall.position.set(0, 0, -wallConfig.depth);
-            curvedWall.rotation.y = Math.PI;
+            curvedWall.rotation.y = 0;
             curvedWall.renderOrder = 0;
+            curvedWall.visible = false;
             hologramPhotoCylinderGroup.add(curvedWall);
             
             const totalArcLength = wallConfig.radius * wallConfig.arcAngle;
@@ -918,7 +919,7 @@
                                 side: THREE.FrontSide
                             });
                             const photo = new THREE.Mesh(new THREE.PlaneGeometry(actualPhotoWidth, actualPhotoHeight), photoMat);
-                            photo.position.z = 0;
+                            photo.position.z = 0.1;
                             photo.renderOrder = 2;
                             group.add(photo);
                         
