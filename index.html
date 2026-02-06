@@ -151,14 +151,15 @@
                     intensity: 0.15
                 },
                 showPhoto: false,
-                photoWall: {
-                    layout: 'sphere',
-                    radius: 15,
-                    gridSize: { rows: 4, cols: 6 },
-                    spacing: 2.5,
-                    photoSize: { width: 1.8, height: 1.8 },
+                cylinder: {
+                    radius: 12,
+                    rows: 3,
+                    photoSize: { width: 2.5, height: 2.5 },
+                    rowSpacing: 3.0,
+                    rotationSpeed: 0.03,
                     frameColor: 0x00ffff,
-                    frameOpacity: 0.6
+                    frameWidth: 0.12,
+                    frameOpacity: 0.5
                 }
             },
             camera: { z: 44 },
@@ -820,105 +821,75 @@
             console.log('========== 全息粒子系统创建完成 ==========');
         }
 
-        function calculateHologramPhotoGrid(photoCount) {
-            const aspect = window.innerWidth / window.innerHeight;
+        async function createHologramPhotoCylinder() {
+            console.log('========== 开始创建全息3D圆筒照片墙 ==========');
             
-            let rows, cols;
-            
-            if (photoCount <= 1) {
-                rows = 1;
-                cols = 1;
-            } else if (photoCount <= 4) {
-                rows = 2;
-                cols = 2;
-            } else if (photoCount <= 9) {
-                rows = 3;
-                cols = 3;
-            } else if (photoCount <= 16) {
-                rows = 4;
-                cols = 4;
-            } else if (photoCount <= 25) {
-                rows = 5;
-                cols = 5;
-            } else if (photoCount <= 36) {
-                rows = 6;
-                cols = 6;
-            } else {
-                const sqrt = Math.ceil(Math.sqrt(photoCount));
-                rows = sqrt;
-                cols = sqrt;
-            }
-            
-            if (aspect < 1) {
-                const temp = rows;
-                rows = cols;
-                cols = temp;
-            }
-            
-            const spacing = 0.6;
-            const photoSize = 2.0;
-            
-            const totalWidth = cols * photoSize + (cols - 1) * spacing;
-            const totalHeight = rows * photoSize + (rows - 1) * spacing;
-            
-            const startX = -totalWidth / 2 + photoSize / 2;
-            const startY = -totalHeight / 2 + photoSize / 2;
-            
-            return {
-                rows,
-                cols,
-                spacing,
-                photoSize: { width: photoSize, height: photoSize },
-                startX,
-                startY
-            };
-        }
-
-        async function createHologramPhotoWall() {
-            console.log('========== 开始创建全息照片墙 ==========');
-            
-            hologramPhotoWallGroup = new THREE.Group();
-            hologramPhotoWallGroup.position.z = -20;
-            scene.add(hologramPhotoWallGroup);
+            hologramPhotoCylinderGroup = new THREE.Group();
+            scene.add(hologramPhotoCylinderGroup);
             
             const photos = STATE.photos || [];
             const photoCount = photos.length;
             
             if (photoCount === 0) {
-                console.warn('没有可用的照片，跳过照片墙创建');
+                console.warn('没有可用的照片，跳过圆筒照片墙创建');
                 return;
             }
             
-            const grid = calculateHologramPhotoGrid(photoCount);
+            const cylinderConfig = CONFIG.hologram.cylinder;
+            const radius = cylinderConfig.radius;
+            const rows = cylinderConfig.rows;
+            const photoSize = cylinderConfig.photoSize;
+            const rowSpacing = cylinderConfig.rowSpacing;
+            const frameColor = cylinderConfig.frameColor;
+            const frameWidth = cylinderConfig.frameWidth;
+            const frameOpacity = cylinderConfig.frameOpacity;
             
-            const frameColor = 0x00ffff;
-            const frameOpacity = 0.5;
+            const photosPerRow = Math.ceil(photoCount / rows);
+            const angleStep = (Math.PI * 2) / photosPerRow;
             
-            for (let i = 0; i < photoCount; i++) {
-                const row = Math.floor(i / grid.cols);
-                const col = i % grid.cols;
-                
-                const x = grid.startX + col * (grid.photoSize.width + grid.spacing);
-                const y = grid.startY + row * (grid.photoSize.height + grid.spacing);
-                
-                const group = await createHologramPhotoFrame(photos[i], grid.photoSize, frameColor, frameOpacity);
-                group.position.set(x, y, 0);
-                group.userData = { 
-                    originalPosition: new THREE.Vector3(x, y, 0),
-                    index: i,
-                    photoSrc: photos[i]
+            for (let row = 0; row < rows; row++) {
+                const rowGroup = new THREE.Group();
+                rowGroup.userData = { 
+                    rowIndex: row,
+                    rotationDirection: row % 2 === 0 ? 1 : -1,
+                    rotationSpeed: cylinderConfig.rotationSpeed
                 };
                 
-                hologramPhotoWallGroup.add(group);
+                const startY = ((rows - 1) * rowSpacing) / 2 - row * rowSpacing;
+                
+                for (let i = 0; i < photosPerRow; i++) {
+                    const photoIndex = row * photosPerRow + i;
+                    if (photoIndex >= photoCount) break;
+                    
+                    const angle = i * angleStep;
+                    const x = Math.cos(angle) * radius;
+                    const z = Math.sin(angle) * radius;
+                    
+                    const group = await createHologramPhotoFrame(photos[photoIndex], photoSize, frameColor, frameOpacity, frameWidth);
+                    group.position.set(x, startY, z);
+                    group.rotation.y = -angle;
+                    group.userData = { 
+                        originalPosition: new THREE.Vector3(x, startY, z),
+                        originalRotation: new THREE.Euler(0, -angle, 0),
+                        index: photoIndex,
+                        photoSrc: photos[photoIndex],
+                        rowIndex: row,
+                        angle: angle
+                    };
+                    
+                    rowGroup.add(group);
+                }
+                
+                hologramPhotoCylinderGroup.add(rowGroup);
             }
             
-            hologramPhotoWallGroup.visible = false;
+            hologramPhotoCylinderGroup.visible = false;
             
-            console.log('全息照片墙创建完成，照片数量:', photoCount, '网格布局:', grid.rows + 'x' + grid.cols);
-            console.log('========== 全息照片墙创建完成 ==========');
+            console.log('全息3D圆筒照片墙创建完成，照片数量:', photoCount, '行数:', rows, '半径:', radius);
+            console.log('========== 全息3D圆筒照片墙创建完成 ==========');
         }
 
-        async function createHologramPhotoFrame(photoSrc, size, frameColor, frameOpacity) {
+        async function createHologramPhotoFrame(photoSrc, size, frameColor, frameOpacity, frameWidth = 0.12) {
             return new Promise((resolve) => {
                 const loader = new THREE.TextureLoader();
                 loader.load(photoSrc, (texture) => {
@@ -937,7 +908,6 @@
                     
                     const group = new THREE.Group();
                     
-                    const frameWidth = 0.12;
                     const frameGeo = new THREE.BoxGeometry(photoW + frameWidth, photoH + frameWidth, 0.05);
                     const frameMat = new THREE.MeshBasicMaterial({ 
                         color: frameColor, 
@@ -980,7 +950,7 @@
             if (snowSystem) snowSystem.visible = isIce;
             if (hologramSystem) hologramSystem.visible = isHologram;
             if (hologramBackgroundSystem) hologramBackgroundSystem.visible = isHologram;
-            if (hologramPhotoWallGroup) hologramPhotoWallGroup.visible = isHologram;
+            if (hologramPhotoCylinderGroup) hologramPhotoCylinderGroup.visible = isHologram;
 
             if (isHologram) {
                 particleSystem.forEach(p => {
@@ -1261,9 +1231,16 @@
             if (isPointing) { 
                 STATE.mode = 'FOCUS';
                 if (!STATE.wasPointing) {
-                    if (STATE.currentThemeIndex === 2 && hologramPhotoWallGroup && hologramPhotoWallGroup.children.length > 0) {
-                        const photos = hologramPhotoWallGroup.children;
-                        STATE.focusTarget = photos[(++STATE.currentPhotoIndex)%photos.length];
+                    if (STATE.currentThemeIndex === 2 && hologramPhotoCylinderGroup && hologramPhotoCylinderGroup.children.length > 0) {
+                        let allPhotos = [];
+                        hologramPhotoCylinderGroup.children.forEach(rowGroup => {
+                            rowGroup.children.forEach(photoGroup => {
+                                allPhotos.push(photoGroup);
+                            });
+                        });
+                        if (allPhotos.length > 0) {
+                            STATE.focusTarget = allPhotos[(++STATE.currentPhotoIndex)%allPhotos.length];
+                        }
                     } else {
                         const photos = particleSystem.filter(p => p.type === 'PHOTO');
                         STATE.focusTarget = photos.length ? photos[(++STATE.currentPhotoIndex)%photos.length].mesh : null;
@@ -1346,40 +1323,50 @@
             if (STATE.currentThemeIndex === 2) {
                 hologramParticleSystem.forEach(p => p.update(dt, STATE.time, STATE.mode, STATE.scatterScale));
                 
-                if (hologramPhotoWallGroup && hologramPhotoWallGroup.visible) {
-                    hologramPhotoWallGroup.children.forEach((photoGroup, index) => {
-                        if (STATE.mode === 'FOCUS' && STATE.focusTarget === photoGroup) {
-                            const targetPos = new THREE.Vector3(0, 0, 8);
-                            photoGroup.position.lerp(targetPos, 6.0 * dt);
-                            photoGroup.scale.lerp(new THREE.Vector3(2.5, 2.5, 2.5), 6.0 * dt);
-                            
-                            if (photoGroup.children[0]) {
-                                photoGroup.children[0].material.opacity = THREE.MathUtils.lerp(photoGroup.children[0].material.opacity, 0.9, 6.0 * dt);
-                            }
-                            if (photoGroup.children[1]) {
-                                photoGroup.children[1].material.opacity = THREE.MathUtils.lerp(photoGroup.children[1].material.opacity, 1.0, 6.0 * dt);
-                            }
-                        } else {
-                            const originalPos = photoGroup.userData.originalPosition;
-                            photoGroup.position.lerp(originalPos, 6.0 * dt);
-                            photoGroup.scale.lerp(new THREE.Vector3(1, 1, 1), 6.0 * dt);
-                            
-                            if (STATE.mode === 'FOCUS') {
+                if (hologramPhotoCylinderGroup && hologramPhotoCylinderGroup.visible) {
+                    hologramPhotoCylinderGroup.children.forEach(rowGroup => {
+                        if (rowGroup.userData.rotationDirection !== undefined) {
+                            rowGroup.rotation.y += rowGroup.userData.rotationDirection * rowGroup.userData.rotationSpeed * dt;
+                        }
+                    });
+                    
+                    hologramPhotoCylinderGroup.children.forEach(rowGroup => {
+                        rowGroup.children.forEach(photoGroup => {
+                            if (STATE.mode === 'FOCUS' && STATE.focusTarget === photoGroup) {
+                                const targetPos = new THREE.Vector3(0, 0, 8);
+                                photoGroup.position.lerp(targetPos, 6.0 * dt);
+                                photoGroup.scale.lerp(new THREE.Vector3(2.5, 2.5, 2.5), 6.0 * dt);
+                                
                                 if (photoGroup.children[0]) {
-                                    photoGroup.children[0].material.opacity = THREE.MathUtils.lerp(photoGroup.children[0].material.opacity, 0.3, 6.0 * dt);
-                                }
-                                if (photoGroup.children[1]) {
-                                    photoGroup.children[1].material.opacity = THREE.MathUtils.lerp(photoGroup.children[1].material.opacity, 0.7, 6.0 * dt);
-                                }
-                            } else {
-                                if (photoGroup.children[0]) {
-                                    photoGroup.children[0].material.opacity = THREE.MathUtils.lerp(photoGroup.children[0].material.opacity, 0.5, 6.0 * dt);
+                                    photoGroup.children[0].material.opacity = THREE.MathUtils.lerp(photoGroup.children[0].material.opacity, 0.9, 6.0 * dt);
                                 }
                                 if (photoGroup.children[1]) {
                                     photoGroup.children[1].material.opacity = THREE.MathUtils.lerp(photoGroup.children[1].material.opacity, 1.0, 6.0 * dt);
                                 }
+                            } else {
+                                const originalPos = photoGroup.userData.originalPosition.clone();
+                                const currentRotation = rowGroup.rotation.y;
+                                originalPos.applyAxisAngle(new THREE.Vector3(0, 1, 0), currentRotation);
+                                photoGroup.position.lerp(originalPos, 6.0 * dt);
+                                photoGroup.scale.lerp(new THREE.Vector3(1, 1, 1), 6.0 * dt);
+                                
+                                if (STATE.mode === 'FOCUS') {
+                                    if (photoGroup.children[0]) {
+                                        photoGroup.children[0].material.opacity = THREE.MathUtils.lerp(photoGroup.children[0].material.opacity, 0.3, 6.0 * dt);
+                                    }
+                                    if (photoGroup.children[1]) {
+                                        photoGroup.children[1].material.opacity = THREE.MathUtils.lerp(photoGroup.children[1].material.opacity, 0.7, 6.0 * dt);
+                                    }
+                                } else {
+                                    if (photoGroup.children[0]) {
+                                        photoGroup.children[0].material.opacity = THREE.MathUtils.lerp(photoGroup.children[0].material.opacity, 0.5, 6.0 * dt);
+                                    }
+                                    if (photoGroup.children[1]) {
+                                        photoGroup.children[1].material.opacity = THREE.MathUtils.lerp(photoGroup.children[1].material.opacity, 1.0, 6.0 * dt);
+                                    }
+                                }
                             }
-                        }
+                        });
                     });
                 }
             } else {
@@ -1522,7 +1509,7 @@
                 
                 loadDefaultPhotos();
                 loadDefaultMusic();
-                await createHologramPhotoWall();
+                await createHologramPhotoCylinder();
             } catch (error) {
                 console.error('初始化失败:', error);
             }
