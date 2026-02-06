@@ -820,11 +820,65 @@
             console.log('========== 全息粒子系统创建完成 ==========');
         }
 
+        function calculateHologramPhotoGrid(photoCount) {
+            const aspect = window.innerWidth / window.innerHeight;
+            
+            let rows, cols;
+            
+            if (photoCount <= 1) {
+                rows = 1;
+                cols = 1;
+            } else if (photoCount <= 4) {
+                rows = 2;
+                cols = 2;
+            } else if (photoCount <= 9) {
+                rows = 3;
+                cols = 3;
+            } else if (photoCount <= 16) {
+                rows = 4;
+                cols = 4;
+            } else if (photoCount <= 25) {
+                rows = 5;
+                cols = 5;
+            } else if (photoCount <= 36) {
+                rows = 6;
+                cols = 6;
+            } else {
+                const sqrt = Math.ceil(Math.sqrt(photoCount));
+                rows = sqrt;
+                cols = sqrt;
+            }
+            
+            if (aspect < 1) {
+                const temp = rows;
+                rows = cols;
+                cols = temp;
+            }
+            
+            const spacing = 0.6;
+            const photoSize = 2.0;
+            
+            const totalWidth = cols * photoSize + (cols - 1) * spacing;
+            const totalHeight = rows * photoSize + (rows - 1) * spacing;
+            
+            const startX = -totalWidth / 2 + photoSize / 2;
+            const startY = -totalHeight / 2 + photoSize / 2;
+            
+            return {
+                rows,
+                cols,
+                spacing,
+                photoSize: { width: photoSize, height: photoSize },
+                startX,
+                startY
+            };
+        }
+
         async function createHologramPhotoWall() {
             console.log('========== 开始创建全息照片墙 ==========');
             
             hologramPhotoWallGroup = new THREE.Group();
-            hologramPhotoWallGroup.position.z = -10;
+            hologramPhotoWallGroup.position.z = -20;
             scene.add(hologramPhotoWallGroup);
             
             const photos = STATE.photos || [];
@@ -835,59 +889,32 @@
                 return;
             }
             
-            const layout = CONFIG.hologram.photoWall.layout;
-            const photoSize = CONFIG.hologram.photoWall.photoSize;
-            const frameColor = CONFIG.colors.hologram.primary;
-            const frameOpacity = CONFIG.hologram.photoWall.frameOpacity;
+            const grid = calculateHologramPhotoGrid(photoCount);
             
-            if (layout === 'sphere') {
-                const radius = CONFIG.hologram.photoWall.radius;
+            const frameColor = 0x00ffff;
+            const frameOpacity = 0.5;
+            
+            for (let i = 0; i < photoCount; i++) {
+                const row = Math.floor(i / grid.cols);
+                const col = i % grid.cols;
                 
-                for (let i = 0; i < photoCount; i++) {
-                    const angle = (i / photoCount) * Math.PI * 2;
-                    const x = Math.cos(angle) * radius;
-                    const y = Math.sin(angle) * radius;
-                    
-                    const group = await createHologramPhotoFrame(photos[i], photoSize, frameColor, frameOpacity);
-                    group.position.set(x, y, 0);
-                    group.userData = { 
-                        originalPosition: new THREE.Vector3(x, y, 0),
-                        index: i,
-                        photoSrc: photos[i]
-                    };
-                    
-                    hologramPhotoWallGroup.add(group);
-                }
-            } else if (layout === 'grid') {
-                const rows = CONFIG.hologram.photoWall.gridSize.rows;
-                const cols = CONFIG.hologram.photoWall.gridSize.cols;
-                const spacing = CONFIG.hologram.photoWall.spacing;
+                const x = grid.startX + col * (grid.photoSize.width + grid.spacing);
+                const y = grid.startY + row * (grid.photoSize.height + grid.spacing);
                 
-                const startX = -((cols - 1) * spacing) / 2;
-                const startY = -((rows - 1) * spacing) / 2;
+                const group = await createHologramPhotoFrame(photos[i], grid.photoSize, frameColor, frameOpacity);
+                group.position.set(x, y, 0);
+                group.userData = { 
+                    originalPosition: new THREE.Vector3(x, y, 0),
+                    index: i,
+                    photoSrc: photos[i]
+                };
                 
-                for (let i = 0; i < photoCount && i < rows * cols; i++) {
-                    const row = Math.floor(i / cols);
-                    const col = i % cols;
-                    
-                    const x = startX + col * spacing;
-                    const y = startY + row * spacing;
-                    
-                    const group = await createHologramPhotoFrame(photos[i], photoSize, frameColor, frameOpacity);
-                    group.position.set(x, y, 0);
-                    group.userData = { 
-                        originalPosition: new THREE.Vector3(x, y, 0),
-                        index: i,
-                        photoSrc: photos[i]
-                    };
-                    
-                    hologramPhotoWallGroup.add(group);
-                }
+                hologramPhotoWallGroup.add(group);
             }
             
             hologramPhotoWallGroup.visible = false;
             
-            console.log('全息照片墙创建完成，照片数量:', photoCount);
+            console.log('全息照片墙创建完成，照片数量:', photoCount, '网格布局:', grid.rows + 'x' + grid.cols);
             console.log('========== 全息照片墙创建完成 ==========');
         }
 
@@ -910,7 +937,8 @@
                     
                     const group = new THREE.Group();
                     
-                    const frameGeo = new THREE.BoxGeometry(photoW + 0.1, photoH + 0.1, 0.05);
+                    const frameWidth = 0.12;
+                    const frameGeo = new THREE.BoxGeometry(photoW + frameWidth, photoH + frameWidth, 0.05);
                     const frameMat = new THREE.MeshBasicMaterial({ 
                         color: frameColor, 
                         transparent: true, 
@@ -922,8 +950,8 @@
                     
                     const photoMat = new THREE.MeshBasicMaterial({ 
                         map: texture,
-                        transparent: true,
-                        opacity: 0.9
+                        transparent: false,
+                        opacity: 1.0
                     });
                     const photo = new THREE.Mesh(new THREE.PlaneGeometry(photoW, photoH), photoMat);
                     photo.position.z = 0.03;
@@ -1321,7 +1349,7 @@
                 if (hologramPhotoWallGroup && hologramPhotoWallGroup.visible) {
                     hologramPhotoWallGroup.children.forEach((photoGroup, index) => {
                         if (STATE.mode === 'FOCUS' && STATE.focusTarget === photoGroup) {
-                            const targetPos = new THREE.Vector3(0, 0, 5);
+                            const targetPos = new THREE.Vector3(0, 0, 8);
                             photoGroup.position.lerp(targetPos, 6.0 * dt);
                             photoGroup.scale.lerp(new THREE.Vector3(2.5, 2.5, 2.5), 6.0 * dt);
                             
@@ -1341,14 +1369,14 @@
                                     photoGroup.children[0].material.opacity = THREE.MathUtils.lerp(photoGroup.children[0].material.opacity, 0.3, 6.0 * dt);
                                 }
                                 if (photoGroup.children[1]) {
-                                    photoGroup.children[1].material.opacity = THREE.MathUtils.lerp(photoGroup.children[1].material.opacity, 0.5, 6.0 * dt);
+                                    photoGroup.children[1].material.opacity = THREE.MathUtils.lerp(photoGroup.children[1].material.opacity, 0.7, 6.0 * dt);
                                 }
                             } else {
                                 if (photoGroup.children[0]) {
-                                    photoGroup.children[0].material.opacity = THREE.MathUtils.lerp(photoGroup.children[0].material.opacity, CONFIG.hologram.photoWall.frameOpacity, 6.0 * dt);
+                                    photoGroup.children[0].material.opacity = THREE.MathUtils.lerp(photoGroup.children[0].material.opacity, 0.5, 6.0 * dt);
                                 }
                                 if (photoGroup.children[1]) {
-                                    photoGroup.children[1].material.opacity = THREE.MathUtils.lerp(photoGroup.children[1].material.opacity, 0.9, 6.0 * dt);
+                                    photoGroup.children[1].material.opacity = THREE.MathUtils.lerp(photoGroup.children[1].material.opacity, 1.0, 6.0 * dt);
                                 }
                             }
                         }
