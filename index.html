@@ -1600,6 +1600,8 @@
                 await createHologramPhotoCylinder();
                 
                 switchTheme(2);
+                
+                await new Promise(resolve => setTimeout(resolve, 500));
             } catch (error) {
                 console.error('初始化失败:', error);
             }
@@ -1624,7 +1626,7 @@
                     loader.style.opacity = 0;
                     setTimeout(() => loader.remove(), 1200);
                 }
-            }, 5000);
+            }, 10000);
         });
 
         init();
