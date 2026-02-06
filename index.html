@@ -845,7 +845,11 @@
                 arcAngle: Math.PI * 0.85,
                 depth: 18,
                 photoSpacing: 0.02,
-                scrollSpeed: 1.5
+                scrollSpeed: 1.5,
+                photoHeight: 5,
+                photoWidth: 7.5,
+                rows: 5,
+                cols: 8
             };
             
             const curvedWallGeo = new THREE.CylinderGeometry(
@@ -871,8 +875,9 @@
             hologramPhotoCylinderGroup.add(curvedWall);
             
             const totalArcLength = wallConfig.radius * wallConfig.arcAngle;
-            const photoCountOnWall = Math.min(photoCount, 40);
-            const arcStep = wallConfig.arcAngle / photoCountOnWall;
+            const photoCountOnWall = Math.min(photoCount, wallConfig.rows * wallConfig.cols);
+            const arcStep = wallConfig.arcAngle / wallConfig.cols;
+            const rowHeight = wallConfig.height / wallConfig.rows;
             
             STATE.hologramPhotoWall = {
                 photos: [],
@@ -881,69 +886,73 @@
                 wallConfig: wallConfig
             };
             
-            for (let i = 0; i < photoCountOnWall; i++) {
-                const photoIndex = i % photoCount;
-                const loader = new THREE.TextureLoader();
-                await new Promise((resolve) => {
-                    loader.load(photos[photoIndex], (texture) => {
-                        texture.colorSpace = THREE.SRGBColorSpace;
-                        
-                        const aspect = texture.image.width / texture.image.height;
-                        const photoHeight = 5;
-                        const photoWidth = photoHeight * aspect;
-                        
-                        const group = new THREE.Group();
-                        
-                        const frameGeo = new THREE.BoxGeometry(photoWidth + frameWidth, photoHeight + frameWidth, 0.05);
-                        const frameMat = new THREE.MeshBasicMaterial({
-                            color: frameColor,
-                            transparent: true,
-                            opacity: frameOpacity,
-                            side: THREE.DoubleSide,
-                            depthWrite: true,
-                            depthTest: true
+            for (let row = 0; row < wallConfig.rows; row++) {
+                for (let col = 0; col < wallConfig.cols; col++) {
+                    const photoIndex = (row * wallConfig.cols + col) % photoCount;
+                    const loader = new THREE.TextureLoader();
+                    await new Promise((resolve) => {
+                        loader.load(photos[photoIndex], (texture) => {
+                            texture.colorSpace = THREE.SRGBColorSpace;
+                            
+                            const aspect = texture.image.width / texture.image.height;
+                            const photoHeight = wallConfig.photoHeight;
+                            const photoWidth = photoHeight * aspect;
+                            
+                            const group = new THREE.Group();
+                            
+                            const frameGeo = new THREE.BoxGeometry(photoWidth + frameWidth, photoHeight + frameWidth, 0.05);
+                            const frameMat = new THREE.MeshBasicMaterial({
+                                color: frameColor,
+                                transparent: true,
+                                opacity: frameOpacity,
+                                side: THREE.DoubleSide,
+                                depthWrite: true,
+                                depthTest: true
+                            });
+                            const frame = new THREE.Mesh(frameGeo, frameMat);
+                            frame.renderOrder = 1;
+                            group.add(frame);
+                            
+                            const photoMat = new THREE.MeshBasicMaterial({
+                                map: texture,
+                                transparent: false,
+                                opacity: 1.0,
+                                depthWrite: true,
+                                depthTest: true,
+                                side: THREE.FrontSide
+                            });
+                            const photo = new THREE.Mesh(new THREE.PlaneGeometry(photoWidth, photoHeight), photoMat);
+                            photo.position.z = 0.04;
+                            photo.renderOrder = 2;
+                            group.add(photo);
+                            
+                            const angle = -wallConfig.arcAngle / 2 + col * arcStep + arcStep / 2;
+                            const x = Math.sin(angle) * wallConfig.radius;
+                            const z = -Math.cos(angle) * wallConfig.radius - wallConfig.depth;
+                            const y = (row - (wallConfig.rows - 1) / 2) * rowHeight;
+                            
+                            group.position.set(x, y, z);
+                            group.lookAt(0, y, 0);
+                            
+                            group.userData = {
+                                originalAngle: angle,
+                                originalX: x,
+                                originalY: y,
+                                originalZ: z,
+                                index: photoIndex,
+                                photoSrc: photos[photoIndex],
+                                width: photoWidth,
+                                height: photoHeight,
+                                row: row,
+                                col: col
+                            };
+                            
+                            hologramPhotoCylinderGroup.add(group);
+                            STATE.hologramPhotoWall.photos.push(group);
+                            resolve();
                         });
-                        const frame = new THREE.Mesh(frameGeo, frameMat);
-                        frame.renderOrder = 1;
-                        group.add(frame);
-                        
-                        const photoMat = new THREE.MeshBasicMaterial({
-                            map: texture,
-                            transparent: false,
-                            opacity: 1.0,
-                            depthWrite: true,
-                            depthTest: true,
-                            side: THREE.FrontSide
-                        });
-                        const photo = new THREE.Mesh(new THREE.PlaneGeometry(photoWidth, photoHeight), photoMat);
-                        photo.position.z = 0.04;
-                        photo.renderOrder = 2;
-                        group.add(photo);
-                        
-                        const angle = -wallConfig.arcAngle / 2 + i * arcStep + arcStep / 2;
-                        const x = Math.sin(angle) * wallConfig.radius;
-                        const z = -Math.cos(angle) * wallConfig.radius - wallConfig.depth;
-                        const y = ((i % 2) - 0.5) * (photoHeight + 0.5);
-                        
-                        group.position.set(x, y, z);
-                        group.lookAt(0, y, 0);
-                        
-                        group.userData = {
-                            originalAngle: angle,
-                            originalX: x,
-                            originalY: y,
-                            originalZ: z,
-                            index: photoIndex,
-                            photoSrc: photos[photoIndex],
-                            width: photoWidth,
-                            height: photoHeight
-                        };
-                        
-                        hologramPhotoCylinderGroup.add(group);
-                        STATE.hologramPhotoWall.photos.push(group);
-                        resolve();
                     });
-                });
+                }
             }
             
             hologramPhotoCylinderGroup.visible = false;
@@ -1302,7 +1311,29 @@
                 STATE.mode = 'FOCUS';
                 if (!STATE.wasPointing) {
                     if (STATE.currentThemeIndex === 2 && hologramPhotoCylinderGroup && STATE.hologramPhotoWall && STATE.hologramPhotoWall.photos.length > 0) {
-                        STATE.focusTarget = STATE.hologramPhotoWall.photos[(++STATE.currentPhotoIndex) % STATE.hologramPhotoWall.photos.length];
+                        const photos = STATE.hologramPhotoWall.photos;
+                        let bestPhoto = null;
+                        let bestDistance = Infinity;
+                        
+                        photos.forEach(photo => {
+                            if (!photo.visible) return;
+                            
+                            const screenPos = photo.position.clone().project(camera);
+                            const screenX = (screenPos.x + 1) / 2;
+                            const screenY = (1 - screenPos.y) / 2;
+                            
+                            const handX = (lm[8].x + lm[12].x) / 2;
+                            const handY = (lm[8].y + lm[12].y) / 2;
+                            
+                            const distance = Math.sqrt(Math.pow(screenX - handX, 2) + Math.pow(screenY - handY, 2));
+                            
+                            if (distance < bestDistance && distance < 0.3) {
+                                bestDistance = distance;
+                                bestPhoto = photo;
+                            }
+                        });
+                        
+                        STATE.focusTarget = bestPhoto || photos[(++STATE.currentPhotoIndex) % photos.length];
                     } else {
                         const photos = particleSystem.filter(p => p.type === 'PHOTO');
                         STATE.focusTarget = photos.length ? photos[(++STATE.currentPhotoIndex)%photos.length].mesh : null;
@@ -1407,11 +1438,21 @@
                         
                         wall.scrollOffset += wall.wallConfig.scrollSpeed * dt;
                         
+                        const arcAngle = wall.wallConfig.arcAngle;
+                        const normalizedOffset = wall.scrollOffset % arcAngle;
+                        
                         wall.photos.forEach((photoGroup, index) => {
                             const userData = photoGroup.userData;
                             if (!userData || userData.originalAngle === undefined) return;
                             
-                            const currentAngle = userData.originalAngle + wall.scrollOffset;
+                            let currentAngle = userData.originalAngle + normalizedOffset;
+                            
+                            if (currentAngle > arcAngle / 2) {
+                                currentAngle -= arcAngle;
+                            } else if (currentAngle < -arcAngle / 2) {
+                                currentAngle += arcAngle;
+                            }
+                            
                             const x = Math.sin(currentAngle) * wall.wallConfig.radius;
                             const z = -Math.cos(currentAngle) * wall.wallConfig.radius - wall.wallConfig.depth;
                             
