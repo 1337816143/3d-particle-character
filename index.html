@@ -152,13 +152,13 @@
                 },
                 showPhoto: false,
                 cylinder: {
-                    radius: 30,
+                    radius: 36,
                     rows: 3,
-                    photoSize: { width: 6.25, height: 6.25 },
+                    photoSize: { width: 7.5, height: 7.5 },
                     rowSpacing: 8.0,
                     rotationSpeed: 0.015,
-                    frameColor: 0x00ffff,
-                    frameWidth: 0.12,
+                    frameColor: 0xffffff,
+                    frameWidth: 0.06,
                     frameOpacity: 0.5
                 }
             },
@@ -1336,6 +1336,7 @@
                                 const targetPos = new THREE.Vector3(0, 0, 8);
                                 photoGroup.position.lerp(targetPos, 6.0 * dt);
                                 photoGroup.scale.lerp(new THREE.Vector3(2.5, 2.5, 2.5), 6.0 * dt);
+                                photoGroup.lookAt(0, 0, 20);
                                 
                                 if (photoGroup.children[0]) {
                                     photoGroup.children[0].material.opacity = THREE.MathUtils.lerp(photoGroup.children[0].material.opacity, 0.9, 6.0 * dt);
@@ -1349,6 +1350,7 @@
                                 originalPos.applyAxisAngle(new THREE.Vector3(0, 1, 0), currentRotation);
                                 photoGroup.position.lerp(originalPos, 6.0 * dt);
                                 photoGroup.scale.lerp(new THREE.Vector3(1, 1, 1), 6.0 * dt);
+                                photoGroup.lookAt(0, photoGroup.position.y, 0);
                                 
                                 if (STATE.mode === 'FOCUS') {
                                     if (photoGroup.children[0]) {
