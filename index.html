@@ -669,7 +669,7 @@
             const pos = [], colors = [];
             for(let i=0; i<3000; i++) {
                 const r = 50 + Math.random() * 100, theta = Math.random() * Math.PI * 2, phi = Math.acos(2 * Math.random() - 1);
-                pos.push(r * Math.sin(phi) * cos(theta), r * Math.sin(phi) * Math.sin(theta), r * Math.cos(phi));
+                pos.push(r * Math.sin(phi) * Math.cos(theta), r * Math.sin(phi) * Math.sin(theta), r * Math.cos(phi));
                 const color = new THREE.Color();
                 color.setHSL(0.1 + Math.random() * 0.1, 0.8, 0.6 + Math.random() * 0.4);
                 colors.push(color.r, color.g, color.b);
@@ -1919,11 +1919,11 @@
                 setTimeout(() => {
                     startTextMode();
                 }, 500);
+                
+                animate();
             } catch (error) {
                 console.error('初始化失败:', error);
             }
-
-            animate(); 
         }
 
         init();
