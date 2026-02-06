@@ -152,9 +152,9 @@
                 },
                 showPhoto: false,
                 cylinder: {
-                    radius: 36,
+                    radius: 43.2,
                     rows: 3,
-                    photoSize: { width: 7.5, height: 7.5 },
+                    photoSize: { width: 9, height: 9 },
                     rowSpacing: 8.0,
                     rotationSpeed: 0.015,
                     frameColor: 0xffffff,
@@ -913,18 +913,27 @@
                         color: frameColor, 
                         transparent: true, 
                         opacity: frameOpacity,
-                        side: THREE.DoubleSide
+                        side: THREE.DoubleSide,
+                        depthWrite: true,
+                        depthTest: true
                     });
                     const frame = new THREE.Mesh(frameGeo, frameMat);
+                    frame.renderOrder = 1;
+                    frame.rotation.z = Math.PI / 2;
                     group.add(frame);
                     
                     const photoMat = new THREE.MeshBasicMaterial({ 
                         map: texture,
                         transparent: false,
-                        opacity: 1.0
+                        opacity: 1.0,
+                        depthWrite: true,
+                        depthTest: true,
+                        side: THREE.FrontSide
                     });
                     const photo = new THREE.Mesh(new THREE.PlaneGeometry(photoW, photoH), photoMat);
-                    photo.position.z = 0.03;
+                    photo.position.z = 0.04;
+                    photo.renderOrder = 2;
+                    photo.rotation.z = Math.PI / 2;
                     group.add(photo);
                     
                     resolve(group);
@@ -1337,6 +1346,7 @@
                                 photoGroup.position.lerp(targetPos, 6.0 * dt);
                                 photoGroup.scale.lerp(new THREE.Vector3(2.5, 2.5, 2.5), 6.0 * dt);
                                 photoGroup.lookAt(0, 0, 20);
+                                photoGroup.rotation.z = Math.PI / 2;
                                 
                                 if (photoGroup.children[0]) {
                                     photoGroup.children[0].material.opacity = THREE.MathUtils.lerp(photoGroup.children[0].material.opacity, 0.9, 6.0 * dt);
@@ -1351,6 +1361,7 @@
                                 photoGroup.position.lerp(originalPos, 6.0 * dt);
                                 photoGroup.scale.lerp(new THREE.Vector3(1, 1, 1), 6.0 * dt);
                                 photoGroup.lookAt(0, photoGroup.position.y, 0);
+                                photoGroup.rotation.z = Math.PI / 2;
                                 
                                 if (STATE.mode === 'FOCUS') {
                                     if (photoGroup.children[0]) {
