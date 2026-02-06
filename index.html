@@ -901,42 +901,26 @@
                 const loader = new THREE.TextureLoader();
                 await new Promise((resolve) => {
                     loader.load(photos[i], (texture) => {
-                        texture.colorSpace = THREE.SRGBColorSpace;
-                        texture.minFilter = THREE.LinearFilter;
-                        texture.magFilter = THREE.LinearFilter;
-                        texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
-                        
-                        const aspect = texture.image.width / texture.image.height;
-                        const actualPhotoHeight = photoHeight;
-                        const actualPhotoWidth = actualPhotoHeight * aspect;
-                        
-                        const group = new THREE.Group();
-                        
-                        const frameGeo = new THREE.BoxGeometry(actualPhotoWidth + frameWidth, actualPhotoHeight + frameWidth, 0.05);
-                        const frameMat = new THREE.MeshBasicMaterial({
-                            color: frameColor,
-                            transparent: true,
-                            opacity: 0.15,
-                            side: THREE.DoubleSide,
-                            depthWrite: false,
-                            depthTest: true
-                        });
-                        const frame = new THREE.Mesh(frameGeo, frameMat);
-                        frame.renderOrder = 1;
-                        group.add(frame);
-                        
-                        const photoMat = new THREE.MeshBasicMaterial({
-                            map: texture,
-                            transparent: false,
-                            opacity: 1.0,
-                            depthWrite: false,
-                            depthTest: true,
-                            side: THREE.FrontSide
-                        });
-                        const photo = new THREE.Mesh(new THREE.PlaneGeometry(actualPhotoWidth, actualPhotoHeight), photoMat);
-                        photo.position.z = 0.04;
-                        photo.renderOrder = 2;
-                        group.add(photo);
+                            texture.colorSpace = THREE.SRGBColorSpace;
+                            
+                            const aspect = texture.image.width / texture.image.height;
+                            const actualPhotoHeight = photoHeight;
+                            const actualPhotoWidth = actualPhotoHeight * aspect;
+                            
+                            const group = new THREE.Group();
+                            
+                            const photoMat = new THREE.MeshBasicMaterial({
+                                map: texture,
+                                transparent: false,
+                                opacity: 1.0,
+                                depthWrite: true,
+                                depthTest: true,
+                                side: THREE.FrontSide
+                            });
+                            const photo = new THREE.Mesh(new THREE.PlaneGeometry(actualPhotoWidth, actualPhotoHeight), photoMat);
+                            photo.position.z = 0;
+                            photo.renderOrder = 2;
+                            group.add(photo);
                         
                         const angle = -wallConfig.arcAngle / 2 + col * arcPerPhoto + arcPerPhoto / 2;
                         const x = Math.sin(angle) * wallConfig.radius;
