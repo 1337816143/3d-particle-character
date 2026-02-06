@@ -1379,6 +1379,8 @@
                 
                 if (hologramPhotoCylinderGroup && hologramPhotoCylinderGroup.visible) {
                     hologramPhotoCylinderGroup.children.forEach(photoGroup => {
+                        if (!photoGroup.userData || !photoGroup.userData.originalPosition) return;
+                        
                         if (STATE.mode === 'FOCUS' && STATE.focusTarget === photoGroup) {
                             photoGroup.visible = true;
                             const targetPos = new THREE.Vector3(0, 0, 8);
