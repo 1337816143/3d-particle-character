@@ -1003,66 +1003,78 @@
         async function createHologramParticleSystem() {
             console.log('========== 开始创建全息粒子系统 ==========');
             
-            const geometry = new THREE.BufferGeometry();
-            const positions = new Float32Array(CONFIG.hologram.count * 3);
-            const colors = new Float32Array(CONFIG.hologram.count * 3);
-            const color1 = new THREE.Color(CONFIG.colors.hologram.primary);
-            const color2 = new THREE.Color(CONFIG.colors.hologram.secondary);
-            const color3 = new THREE.Color(CONFIG.colors.hologram.transition);
+            try {
+                const geometry = new THREE.BufferGeometry();
+                const positions = new Float32Array(CONFIG.hologram.count * 3);
+                const colors = new Float32Array(CONFIG.hologram.count * 3);
+                const color1 = new THREE.Color(CONFIG.colors.hologram.primary);
+                const color2 = new THREE.Color(CONFIG.colors.hologram.secondary);
+                const color3 = new THREE.Color(CONFIG.colors.hologram.transition);
 
-            for (let i = 0; i < CONFIG.hologram.count; i++) {
-                let vertex;
-                if (STATE.modelVertices && STATE.modelVertices.length > 0) {
-                    const vertexIndex = Math.floor(Math.random() * STATE.modelVertices.length);
-                    vertex = STATE.modelVertices[vertexIndex];
-                } else {
-                    const h = CONFIG.particles.treeHeight;
-                    let t = Math.random();
-                    t = Math.pow(t, 0.8);
-                    const y = (t * h) - h/2;
-                    const angle = Math.random() * Math.PI * 2;
-                    const r = Math.max(0.5, CONFIG.particles.treeRadius * (1.0 - t)) * Math.sqrt(Math.random());
-                    vertex = new THREE.Vector3(Math.cos(angle) * r, y, Math.sin(angle) * r);
+                for (let i = 0; i < CONFIG.hologram.count; i++) {
+                    let vertex;
+                    if (STATE.modelVertices && STATE.modelVertices.length > 0) {
+                        const vertexIndex = Math.floor(Math.random() * STATE.modelVertices.length);
+                        vertex = STATE.modelVertices[vertexIndex];
+                    } else {
+                        const h = CONFIG.particles.treeHeight;
+                        let t = Math.random();
+                        t = Math.pow(t, 0.8);
+                        const y = (t * h) - h/2;
+                        const angle = Math.random() * Math.PI * 2;
+                        const r = Math.max(0.5, CONFIG.particles.treeRadius * (1.0 - t)) * Math.sqrt(Math.random());
+                        vertex = new THREE.Vector3(Math.cos(angle) * r, y, Math.sin(angle) * r);
+                    }
+
+                    positions[i * 3] = vertex.x;
+                    positions[i * 3 + 1] = vertex.y;
+                    positions[i * 3 + 2] = vertex.z;
+
+                    const rand = Math.random();
+                    let color;
+                    if (rand < 0.5) {
+                        color = color1.clone();
+                    } else if (rand < 0.85) {
+                        color = color2.clone();
+                    } else {
+                        color = color3.clone();
+                    }
+
+                    colors[i * 3] = color.r;
+                    colors[i * 3 + 1] = color.g;
+                    colors[i * 3 + 2] = color.b;
+
+                    const hologramParticle = new HologramParticle(vertex, color, i);
+                    hologramParticleSystem.push(hologramParticle);
                 }
 
-                positions[i * 3] = vertex.x;
-                positions[i * 3 + 1] = vertex.y;
-                positions[i * 3 + 2] = vertex.z;
+                geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+                geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
-                const rand = Math.random();
-                let color;
-                if (rand < 0.5) {
-                    color = color1.clone();
-                } else if (rand < 0.85) {
-                    color = color2.clone();
-                } else {
-                    color = color3.clone();
+                hologramSystem = new THREE.Points(geometry, matLib.hologram);
+                hologramSystem.visible = false;
+                mainGroup.add(hologramSystem);
+                
+                console.log('全息粒子系统创建完成，全息粒子数:', CONFIG.hologram.count);
+                console.log('========== 全息粒子系统创建完成 ==========');
+                
+                console.log('开始预计算文字粒子位置...');
+                for (let i = 0; i < STATE.textMode.texts.length; i++) {
+                    console.log(`正在计算第 ${i + 1}/${STATE.textMode.texts.length} 段文字: "${STATE.textMode.texts[i]}"`);
+                    const textPositions = createTextParticlePositions(STATE.textMode.texts[i]);
+                    STATE.textMode.textPositions.push(textPositions);
+                    console.log(`第 ${i + 1} 段文字粒子数: ${textPositions.length}`);
                 }
-
-                colors[i * 3] = color.r;
-                colors[i * 3 + 1] = color.g;
-                colors[i * 3 + 2] = color.b;
-
-                const hologramParticle = new HologramParticle(vertex, color, i);
-                hologramParticleSystem.push(hologramParticle);
+                
+                console.log('文字粒子位置预计算完成，共', STATE.textMode.texts.length, '段文字');
+            } catch (error) {
+                console.error('!!! 创建全息粒子系统时出错 ==========');
+                console.error('!!! 错误类型:', error.name);
+                console.error('!!! 错误消息:', error.message);
+                console.error('!!! 错误堆栈:', error.stack);
+                console.error('!!! 将继续初始化，但文字模式可能无法正常工作 !!!');
+                console.error('====================================');
             }
-
-            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-            geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-
-            hologramSystem = new THREE.Points(geometry, matLib.hologram);
-            hologramSystem.visible = false;
-            mainGroup.add(hologramSystem);
-            
-            console.log('全息粒子系统创建完成，全息粒子数:', CONFIG.hologram.count);
-            console.log('========== 全息粒子系统创建完成 ==========');
-            
-            for (let i = 0; i < STATE.textMode.texts.length; i++) {
-                const textPositions = createTextParticlePositions(STATE.textMode.texts[i]);
-                STATE.textMode.textPositions.push(textPositions);
-            }
-            
-            console.log('文字粒子位置预计算完成，共', STATE.textMode.texts.length, '段文字');
         }
 
         async function createHologramPhotoCylinder() {
