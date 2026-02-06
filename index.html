@@ -846,8 +846,9 @@
                 depth: 18,
                 photoSpacing: 0.02,
                 scrollSpeed: 0.2,
-                photoHeight: 8,
-                photoWidth: 12
+                photoHeight: 10,
+                photoWidth: 15,
+                maxRows: 5
             };
             
             const curvedWallGeo = new THREE.CylinderGeometry(
@@ -880,7 +881,7 @@
             
             const arcPerPhoto = (photoWidth + photoSpacing) / wallConfig.radius;
             const photosPerRow = Math.floor(wallConfig.arcAngle / arcPerPhoto);
-            const totalRows = Math.ceil(photoCount / photosPerRow);
+            const totalRows = Math.min(Math.ceil(photoCount / photosPerRow), wallConfig.maxRows);
             const rowHeight = (photoHeight + photoSpacing);
             const totalHeight = totalRows * rowHeight;
             const startRowY = -totalHeight / 2 + rowHeight / 2;
@@ -899,6 +900,9 @@
                 await new Promise((resolve) => {
                     loader.load(photos[i], (texture) => {
                         texture.colorSpace = THREE.SRGBColorSpace;
+                        texture.minFilter = THREE.LinearFilter;
+                        texture.magFilter = THREE.LinearFilter;
+                        texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
                         
                         const aspect = texture.image.width / texture.image.height;
                         const actualPhotoHeight = photoHeight;
@@ -912,7 +916,7 @@
                             transparent: true,
                             opacity: frameOpacity,
                             side: THREE.DoubleSide,
-                            depthWrite: true,
+                            depthWrite: false,
                             depthTest: true
                         });
                         const frame = new THREE.Mesh(frameGeo, frameMat);
@@ -923,7 +927,7 @@
                             map: texture,
                             transparent: false,
                             opacity: 1.0,
-                            depthWrite: true,
+                            depthWrite: false,
                             depthTest: true,
                             side: THREE.FrontSide
                         });
