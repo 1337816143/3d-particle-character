@@ -669,8 +669,11 @@
                 }
 
                 this.position.lerp(target, lerpSpeed * dt);
-                this.rotation.x += dt * CONFIG.hologram.rotationSpeed;
-                this.rotation.y += dt * CONFIG.hologram.rotationSpeed;
+                
+                if (!STATE.textMode.active) {
+                    this.rotation.x += dt * CONFIG.hologram.rotationSpeed;
+                    this.rotation.y += dt * CONFIG.hologram.rotationSpeed;
+                }
             }
         }
 
@@ -739,7 +742,7 @@
         function createTextParticlePositions(text) {
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
-            const fontSize = 60;
+            const fontSize = 80;
             const fontFamily = 'Arial, sans-serif';
             
             ctx.font = `${fontSize}px ${fontFamily}`;
@@ -758,7 +761,7 @@
             
             const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
             const positions = [];
-            const step = 3;
+            const step = 2;
             
             for (let y = 0; y < canvas.height; y += step) {
                 for (let x = 0; x < canvas.width; x += step) {
@@ -766,8 +769,8 @@
                     const alpha = imageData.data[index + 3];
                     if (alpha > 128) {
                         positions.push({
-                            x: (x - canvas.width / 2) * 0.08,
-                            y: -(y - canvas.height / 2) * 0.08,
+                            x: (x - canvas.width / 2) * 0.06,
+                            y: -(y - canvas.height / 2) * 0.06,
                             z: 0
                         });
                     }
@@ -808,12 +811,8 @@
                     particle.basePosition.set(pos.x, pos.y, pos.z);
                     particle.position.set(pos.x, pos.y, pos.z);
                 } else {
-                    particle.basePosition.set(
-                        (Math.random() - 0.5) * 50,
-                        (Math.random() - 0.5) * 30,
-                        (Math.random() - 0.5) * 30
-                    );
-                    particle.position.copy(particle.basePosition);
+                    particle.basePosition.set(0, 0, -1000);
+                    particle.position.set(0, 0, -1000);
                 }
             });
             
@@ -884,11 +883,7 @@
                             targetPositions[index].z
                         );
                     } else {
-                        targetPos = new THREE.Vector3(
-                            (Math.random() - 0.5) * 50,
-                            (Math.random() - 0.5) * 30,
-                            (Math.random() - 0.5) * 30
-                        );
+                        targetPos = new THREE.Vector3(0, 0, -1000);
                     }
                     
                     particle.basePosition.lerp(targetPos, easeProgress * 0.1);
