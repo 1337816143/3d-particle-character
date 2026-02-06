@@ -845,11 +845,9 @@
                 arcAngle: Math.PI * 0.85,
                 depth: 18,
                 photoSpacing: 0.02,
-                scrollSpeed: 0.8,
-                photoHeight: 6.5,
-                photoWidth: 9.75,
-                rows: 4,
-                cols: 6
+                scrollSpeed: 0.2,
+                photoHeight: 8,
+                photoWidth: 12
             };
             
             const curvedWallGeo = new THREE.CylinderGeometry(
@@ -875,9 +873,17 @@
             hologramPhotoCylinderGroup.add(curvedWall);
             
             const totalArcLength = wallConfig.radius * wallConfig.arcAngle;
-            const photoCountOnWall = Math.min(photoCount, wallConfig.rows * wallConfig.cols);
-            const arcStep = wallConfig.arcAngle / wallConfig.cols;
-            const rowHeight = wallConfig.height / wallConfig.rows;
+            
+            const photoWidth = wallConfig.photoWidth;
+            const photoHeight = wallConfig.photoHeight;
+            const photoSpacing = photoWidth * 0.2;
+            
+            const arcPerPhoto = (photoWidth + photoSpacing) / wallConfig.radius;
+            const photosPerRow = Math.floor(wallConfig.arcAngle / arcPerPhoto);
+            const totalRows = Math.ceil(photoCount / photosPerRow);
+            const rowHeight = (photoHeight + photoSpacing);
+            const totalHeight = totalRows * rowHeight;
+            const startRowY = -totalHeight / 2 + rowHeight / 2;
             
             STATE.hologramPhotoWall = {
                 photos: [],
@@ -886,73 +892,72 @@
                 wallConfig: wallConfig
             };
             
-            for (let row = 0; row < wallConfig.rows; row++) {
-                for (let col = 0; col < wallConfig.cols; col++) {
-                    const photoIndex = (row * wallConfig.cols + col) % photoCount;
-                    const loader = new THREE.TextureLoader();
-                    await new Promise((resolve) => {
-                        loader.load(photos[photoIndex], (texture) => {
-                            texture.colorSpace = THREE.SRGBColorSpace;
-                            
-                            const aspect = texture.image.width / texture.image.height;
-                            const photoHeight = wallConfig.photoHeight;
-                            const photoWidth = photoHeight * aspect;
-                            
-                            const group = new THREE.Group();
-                            
-                            const frameGeo = new THREE.BoxGeometry(photoWidth + frameWidth, photoHeight + frameWidth, 0.05);
-                            const frameMat = new THREE.MeshBasicMaterial({
-                                color: frameColor,
-                                transparent: true,
-                                opacity: frameOpacity,
-                                side: THREE.DoubleSide,
-                                depthWrite: true,
-                                depthTest: true
-                            });
-                            const frame = new THREE.Mesh(frameGeo, frameMat);
-                            frame.renderOrder = 1;
-                            group.add(frame);
-                            
-                            const photoMat = new THREE.MeshBasicMaterial({
-                                map: texture,
-                                transparent: false,
-                                opacity: 1.0,
-                                depthWrite: true,
-                                depthTest: true,
-                                side: THREE.FrontSide
-                            });
-                            const photo = new THREE.Mesh(new THREE.PlaneGeometry(photoWidth, photoHeight), photoMat);
-                            photo.position.z = 0.04;
-                            photo.renderOrder = 2;
-                            group.add(photo);
-                            
-                            const angle = -wallConfig.arcAngle / 2 + col * arcStep + arcStep / 2;
-                            const x = Math.sin(angle) * wallConfig.radius;
-                            const z = -Math.cos(angle) * wallConfig.radius - wallConfig.depth;
-                            const y = (row - (wallConfig.rows - 1) / 2) * rowHeight;
-                            
-                            group.position.set(x, y, z);
-                            group.lookAt(0, y, 0);
-                            
-                            group.userData = {
-                                originalAngle: angle,
-                                originalX: x,
-                                originalY: y,
-                                originalZ: z,
-                                index: photoIndex,
-                                photoSrc: photos[photoIndex],
-                                width: photoWidth,
-                                height: photoHeight,
-                                row: row,
-                                col: col
-                            };
-                            
-                            hologramPhotoCylinderGroup.add(group);
-                            STATE.hologramPhotoWall.photos.push(group);
-                            resolve();
+            for (let i = 0; i < photoCount; i++) {
+                const row = Math.floor(i / photosPerRow);
+                const col = i % photosPerRow;
+                const loader = new THREE.TextureLoader();
+                await new Promise((resolve) => {
+                    loader.load(photos[i], (texture) => {
+                        texture.colorSpace = THREE.SRGBColorSpace;
+                        
+                        const aspect = texture.image.width / texture.image.height;
+                        const actualPhotoHeight = photoHeight;
+                        const actualPhotoWidth = actualPhotoHeight * aspect;
+                        
+                        const group = new THREE.Group();
+                        
+                        const frameGeo = new THREE.BoxGeometry(actualPhotoWidth + frameWidth, actualPhotoHeight + frameWidth, 0.05);
+                        const frameMat = new THREE.MeshBasicMaterial({
+                            color: frameColor,
+                            transparent: true,
+                            opacity: frameOpacity,
+                            side: THREE.DoubleSide,
+                            depthWrite: true,
+                            depthTest: true
                         });
+                        const frame = new THREE.Mesh(frameGeo, frameMat);
+                        frame.renderOrder = 1;
+                        group.add(frame);
+                        
+                        const photoMat = new THREE.MeshBasicMaterial({
+                            map: texture,
+                            transparent: false,
+                            opacity: 1.0,
+                            depthWrite: true,
+                            depthTest: true,
+                            side: THREE.FrontSide
+                        });
+                        const photo = new THREE.Mesh(new THREE.PlaneGeometry(actualPhotoWidth, actualPhotoHeight), photoMat);
+                        photo.position.z = 0.04;
+                        photo.renderOrder = 2;
+                        group.add(photo);
+                        
+                        const angle = -wallConfig.arcAngle / 2 + col * arcPerPhoto + arcPerPhoto / 2;
+                        const x = Math.sin(angle) * wallConfig.radius;
+                        const z = -Math.cos(angle) * wallConfig.radius - wallConfig.depth;
+                        const y = startRowY + row * rowHeight;
+                        
+                        group.position.set(x, y, z);
+                        group.lookAt(0, y, 0);
+                        
+                        group.userData = {
+                            originalAngle: angle,
+                            originalX: x,
+                            originalY: y,
+                            originalZ: z,
+                            index: i,
+                            photoSrc: photos[i],
+                            width: actualPhotoWidth,
+                            height: actualPhotoHeight,
+                            row: row,
+                            col: col
+                        };
+                        
+                        hologramPhotoCylinderGroup.add(group);
+                        STATE.hologramPhotoWall.photos.push(group);
+                        resolve();
                     });
-                }
+                });
             }
             
             hologramPhotoCylinderGroup.visible = false;
