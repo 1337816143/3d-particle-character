@@ -152,11 +152,11 @@
                 },
                 showPhoto: false,
                 cylinder: {
-                    radius: 12,
+                    radius: 30,
                     rows: 3,
-                    photoSize: { width: 2.5, height: 2.5 },
-                    rowSpacing: 3.0,
-                    rotationSpeed: 0.03,
+                    photoSize: { width: 6.25, height: 6.25 },
+                    rowSpacing: 8.0,
+                    rotationSpeed: 0.015,
                     frameColor: 0x00ffff,
                     frameWidth: 0.12,
                     frameOpacity: 0.5
@@ -867,7 +867,7 @@
                     
                     const group = await createHologramPhotoFrame(photos[photoIndex], photoSize, frameColor, frameOpacity, frameWidth);
                     group.position.set(x, startY, z);
-                    group.rotation.y = -angle;
+                    group.lookAt(0, startY, 0);
                     group.userData = { 
                         originalPosition: new THREE.Vector3(x, startY, z),
                         originalRotation: new THREE.Euler(0, -angle, 0),
