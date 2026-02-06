@@ -845,25 +845,24 @@
             const frameOpacity = cylinderConfig.frameOpacity;
             
             const photosPerRow = Math.ceil(photoCount / rows);
-            const angleStep = (Math.PI * 2) / photosPerRow;
-            const rowAngleOffset = angleStep / 2;
+            const angleStep = Math.PI / photosPerRow;
             
             for (let row = 0; row < rows; row++) {
                 const rowGroup = new THREE.Group();
                 rowGroup.userData = { 
                     rowIndex: row,
                     rotationDirection: row % 2 === 0 ? 1 : -1,
-                    rotationSpeed: cylinderConfig.rotationSpeed
+                    rotationSpeed: cylinderConfig.rotationSpeed,
+                    baseRotation: 0
                 };
                 
                 const startY = ((rows - 1) * rowSpacing) / 2 - row * rowSpacing;
-                const startAngleOffset = row * rowAngleOffset;
                 
                 for (let i = 0; i < photosPerRow; i++) {
                     const photoIndex = row * photosPerRow + i;
                     if (photoIndex >= photoCount) break;
                     
-                    const angle = i * angleStep + startAngleOffset;
+                    const angle = i * angleStep;
                     const x = Math.cos(angle) * radius;
                     const z = Math.sin(angle) * radius;
                     
@@ -1335,14 +1334,9 @@
                 
                 if (hologramPhotoCylinderGroup && hologramPhotoCylinderGroup.visible) {
                     hologramPhotoCylinderGroup.children.forEach(rowGroup => {
-                        if (rowGroup.userData.rotationDirection !== undefined) {
-                            rowGroup.rotation.y += rowGroup.userData.rotationDirection * rowGroup.userData.rotationSpeed * dt;
-                        }
-                    });
-                    
-                    hologramPhotoCylinderGroup.children.forEach(rowGroup => {
+                        rowGroup.userData.baseRotation += rowGroup.userData.rotationDirection * rowGroup.userData.rotationSpeed * dt;
                         rowGroup.children.forEach(photoGroup => {
-                            const currentAngle = photoGroup.userData.baseAngle + rowGroup.rotation.y;
+                            const currentAngle = photoGroup.userData.baseAngle + rowGroup.userData.baseRotation;
                             const normalizedAngle = ((currentAngle % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
                             const isInBackHalf = normalizedAngle >= Math.PI && normalizedAngle <= Math.PI * 2;
                             
@@ -1362,8 +1356,7 @@
                             } else {
                                 photoGroup.visible = isInBackHalf;
                                 const originalPos = photoGroup.userData.originalPosition.clone();
-                                const currentRotation = rowGroup.rotation.y;
-                                originalPos.applyAxisAngle(new THREE.Vector3(0, 1, 0), currentRotation);
+                                originalPos.applyAxisAngle(new THREE.Vector3(0, 1, 0), rowGroup.userData.baseRotation);
                                 photoGroup.position.lerp(originalPos, 6.0 * dt);
                                 photoGroup.scale.lerp(new THREE.Vector3(1, 1, 1), 6.0 * dt);
                                 photoGroup.lookAt(0, photoGroup.position.y, 0);
