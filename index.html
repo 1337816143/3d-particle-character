@@ -136,7 +136,7 @@
                 snowCount: 2000, snowSpeed: 8
             },
             hologram: {
-                count: 20000,
+                count: 50000,
                 size: 0.2,
                 lerpSpeed: 4.5,
                 rotationSpeed: 0.15,
@@ -168,7 +168,7 @@
 
         const STATE = {
             mode: 'TREE', focusTarget: null, currentPhotoIndex: -1,
-            currentThemeIndex: 0,
+            currentThemeIndex: 2,
             currentMusicIndex: 0,
             gestureDebounceTimer: 0,
             scatterScale: 1.0, gestureBaseSpread: null,
@@ -888,7 +888,7 @@
             
             const rowOffsets = [];
             for (let r = 0; r < totalRows; r++) {
-                rowOffsets.push((Math.random() - 0.5) * arcPerPhoto * 0.5);
+                rowOffsets.push((r % 2 === 0 ? 0.5 : -0.5) * arcPerPhoto * 0.5);
             }
             
             const maxPhotos = totalRows * photosPerRow;
