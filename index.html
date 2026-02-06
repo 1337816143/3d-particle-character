@@ -879,12 +879,17 @@
             const photoWidth = wallConfig.photoWidth;
             const photoHeight = wallConfig.photoHeight;
             
-            const arcPerPhoto = photoWidth / wallConfig.radius;
+            const arcPerPhoto = photoWidth / wallConfig.radius * 0.85;
             const photosPerRow = Math.floor(wallConfig.arcAngle / arcPerPhoto);
             const totalRows = Math.min(Math.ceil(photoCount / photosPerRow), wallConfig.maxRows);
             const rowHeight = photoHeight * 1.2;
             const totalHeight = totalRows * rowHeight;
             const startRowY = -totalHeight / 2 + rowHeight / 2;
+            
+            const rowOffsets = [];
+            for (let r = 0; r < totalRows; r++) {
+                rowOffsets.push((Math.random() - 0.5) * arcPerPhoto * 0.5);
+            }
             
             const maxPhotos = totalRows * photosPerRow;
             const photoCountToCreate = Math.min(photoCount, maxPhotos);
@@ -923,7 +928,7 @@
                             photo.renderOrder = 2;
                             group.add(photo);
                         
-                        const angle = -wallConfig.arcAngle / 2 + col * arcPerPhoto + arcPerPhoto / 2;
+                        const angle = -wallConfig.arcAngle / 2 + col * arcPerPhoto + arcPerPhoto / 2 + rowOffsets[row];
                         const x = Math.sin(angle) * wallConfig.radius;
                         const z = -Math.cos(angle) * wallConfig.radius - wallConfig.depth;
                         const y = startRowY + row * rowHeight;
