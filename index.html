@@ -784,6 +784,16 @@
             STATE.textMode.isTransitioning = false;
             STATE.textMode.transitionProgress = 0;
             
+            const loader = document.getElementById('loader');
+            if (loader) {
+                loader.style.opacity = '0';
+                setTimeout(() => {
+                    if (loader) {
+                        loader.style.display = 'none';
+                    }
+                }, 1200);
+            }
+            
             if (galaxySystem) galaxySystem.visible = true;
             if (snowSystem) snowSystem.visible = false;
             if (hologramSystem) hologramSystem.visible = false;
