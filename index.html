@@ -274,7 +274,29 @@
             modelBoundingBox: null,
             modelCenter: new THREE.Vector3(),
             modelScale: 1.0,
-            hologramPhotoWall: null
+            hologramPhotoWall: null,
+            textMode: {
+                active: false,
+                currentIndex: 0,
+                texts: [
+                    'Hi~ 小七，你好',
+                    '祝宝宝 22 周岁生日快乐！',
+                    '新的一岁，愿所有的期待都如约而至',
+                    '愿日子温柔，岁岁安澜',
+                    '今天是你来到这个世界上的第 8063 天，',
+                    '以后的',
+                    '每一日，都有我相伴',
+                    '每一岁，都胜过往昔',
+                    '平安喜乐，万事顺意'
+                ],
+                textPositions: [],
+                currentTextPositions: [],
+                targetTextPositions: [],
+                transitionProgress: 0,
+                isTransitioning: false,
+                displayTime: 0,
+                displayDuration: 4000
+            }
         };
 
         let scene, camera, renderer, composer, clock = new THREE.Clock();
@@ -632,7 +654,7 @@
                     target = this.basePosition.clone();
                 }
 
-                if (mode === 'TREE') {
+                if (mode === 'TREE' && !STATE.textMode.active) {
                     target.y += Math.sin(time * 2 + this.offset) * CONFIG.hologram.floatAmplitude;
                 }
 
@@ -647,7 +669,7 @@
             const pos = [], colors = [];
             for(let i=0; i<3000; i++) {
                 const r = 50 + Math.random() * 100, theta = Math.random() * Math.PI * 2, phi = Math.acos(2 * Math.random() - 1);
-                pos.push(r * Math.sin(phi) * Math.cos(theta), r * Math.sin(phi) * Math.sin(theta), r * Math.cos(phi));
+                pos.push(r * Math.sin(phi) * cos(theta), r * Math.sin(phi) * Math.sin(theta), r * Math.cos(phi));
                 const color = new THREE.Color();
                 color.setHSL(0.1 + Math.random() * 0.1, 0.8, 0.6 + Math.random() * 0.4);
                 colors.push(color.r, color.g, color.b);
@@ -657,6 +679,200 @@
             const material = new THREE.PointsMaterial({ size: 0.8, vertexColors: true, blending: THREE.AdditiveBlending, transparent: true, opacity: 0.8, depthWrite: false });
             galaxySystem = new THREE.Points(geometry, material);
             bgGroup.add(galaxySystem);
+            
+            createMeteors();
+        }
+
+        function createMeteors() {
+            const meteorCount = 8;
+            const meteors = [];
+            
+            for (let i = 0; i < meteorCount; i++) {
+                const geometry = new THREE.BufferGeometry();
+                const positions = new Float32Array(6);
+                const colors = new Float32Array(6);
+                
+                for (let j = 0; j < 6; j++) {
+                    const color = new THREE.Color();
+                    color.setHSL(0.55 + Math.random() * 0.1, 0.8, 0.9);
+                    colors[j * 3] = color.r;
+                    colors[j * 3 + 1] = color.g;
+                    colors[j * 3 + 2] = color.b;
+                }
+                
+                geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+                geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+                
+                const material = new THREE.LineBasicMaterial({
+                    vertexColors: true,
+                    transparent: true,
+                    opacity: 1.0,
+                    blending: THREE.AdditiveBlending
+                });
+                
+                const meteor = new THREE.Line(geometry, material);
+                meteor.userData = {
+                    speed: 5 + Math.random() * 5,
+                    resetTime: Math.random() * 10,
+                    active: false,
+                    startPos: new THREE.Vector3(),
+                    endPos: new THREE.Vector3()
+                };
+                
+                meteors.push(meteor);
+                bgGroup.add(meteor);
+            }
+            
+            galaxySystem.userData.meteors = meteors;
+        }
+
+        function createTextParticlePositions(text) {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            const fontSize = 60;
+            const fontFamily = 'Arial, sans-serif';
+            
+            ctx.font = `${fontSize}px ${fontFamily}`;
+            const textWidth = ctx.measureText(text).width;
+            const textHeight = fontSize;
+            
+            const padding = 20;
+            canvas.width = textWidth + padding * 2;
+            canvas.height = textHeight + padding * 2;
+            
+            ctx.font = `${fontSize}px ${fontFamily}`;
+            ctx.fillStyle = '#ffffff';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+            
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const positions = [];
+            const step = 3;
+            
+            for (let y = 0; y < canvas.height; y += step) {
+                for (let x = 0; x < canvas.width; x += step) {
+                    const index = (y * canvas.width + x) * 4;
+                    const alpha = imageData.data[index + 3];
+                    if (alpha > 128) {
+                        positions.push({
+                            x: (x - canvas.width / 2) * 0.08,
+                            y: -(y - canvas.height / 2) * 0.08,
+                            z: 0
+                        });
+                    }
+                }
+            }
+            
+            return positions;
+        }
+
+        function startTextMode() {
+            STATE.textMode.active = true;
+            STATE.textMode.currentIndex = 0;
+            STATE.textMode.displayTime = 0;
+            STATE.textMode.isTransitioning = false;
+            STATE.textMode.transitionProgress = 0;
+            
+            galaxySystem.visible = true;
+            snowSystem.visible = false;
+            hologramSystem.visible = false;
+            hologramPhotoCylinderGroup.visible = false;
+            
+            const currentPositions = STATE.textMode.textPositions[0];
+            STATE.textMode.currentTextPositions = currentPositions;
+            
+            hologramParticleSystem.forEach((particle, index) => {
+                if (index < currentPositions.length) {
+                    const pos = currentPositions[index];
+                    particle.basePosition.set(pos.x, pos.y, pos.z);
+                    particle.position.set(pos.x, pos.y, pos.z);
+                } else {
+                    particle.basePosition.set(
+                        (Math.random() - 0.5) * 50,
+                        (Math.random() - 0.5) * 30,
+                        (Math.random() - 0.5) * 30
+                    );
+                    particle.position.copy(particle.basePosition);
+                }
+            });
+            
+            STATE.mode = 'TREE';
+        }
+
+        function updateTextMode(dt) {
+            if (!STATE.textMode.active) return;
+            
+            STATE.textMode.displayTime += dt * 1000;
+            
+            if (!STATE.textMode.isTransitioning && STATE.textMode.displayTime >= STATE.textMode.displayDuration) {
+                STATE.textMode.isTransitioning = true;
+                STATE.textMode.transitionProgress = 0;
+                
+                STATE.textMode.currentIndex++;
+                
+                if (STATE.textMode.currentIndex >= STATE.textMode.texts.length) {
+                    STATE.textMode.active = false;
+                    hologramParticleSystem.forEach((particle, index) => {
+                        if (STATE.modelVertices && STATE.modelVertices.length > 0) {
+                            const vertexIndex = Math.floor(Math.random() * STATE.modelVertices.length);
+                            const vertex = STATE.modelVertices[vertexIndex];
+                            particle.basePosition.copy(vertex);
+                        } else {
+                            const h = CONFIG.particles.treeHeight;
+                            let t = Math.random();
+                            t = Math.pow(t, 0.8);
+                            const y = (t * h) - h/2;
+                            const angle = Math.random() * Math.PI * 2;
+                            const r = Math.max(0.5, CONFIG.particles.treeRadius * (1.0 - t)) * Math.sqrt(Math.random());
+                            particle.basePosition.set(Math.cos(angle) * r, y, Math.sin(angle) * r);
+                        }
+                    });
+                    
+                    switchTheme(2);
+                    return;
+                }
+                
+                const nextPositions = STATE.textMode.textPositions[STATE.textMode.currentIndex];
+                STATE.textMode.targetTextPositions = nextPositions;
+            }
+            
+            if (STATE.textMode.isTransitioning) {
+                STATE.textMode.transitionProgress += dt * 2.0;
+                
+                if (STATE.textMode.transitionProgress >= 1) {
+                    STATE.textMode.isTransitioning = false;
+                    STATE.textMode.displayTime = 0;
+                    STATE.textMode.currentTextPositions = STATE.textMode.targetTextPositions;
+                }
+                
+                const progress = STATE.textMode.transitionProgress;
+                const easeProgress = 1 - Math.pow(1 - progress, 3);
+                
+                const currentPositions = STATE.textMode.currentTextPositions;
+                const targetPositions = STATE.textMode.targetTextPositions;
+                
+                hologramParticleSystem.forEach((particle, index) => {
+                    let targetPos;
+                    
+                    if (index < targetPositions.length) {
+                        targetPos = new THREE.Vector3(
+                            targetPositions[index].x,
+                            targetPositions[index].y,
+                            targetPositions[index].z
+                        );
+                    } else {
+                        targetPos = new THREE.Vector3(
+                            (Math.random() - 0.5) * 50,
+                            (Math.random() - 0.5) * 30,
+                            (Math.random() - 0.5) * 30
+                        );
+                    }
+                    
+                    particle.basePosition.lerp(targetPos, easeProgress * 0.1);
+                    particle.position.copy(particle.basePosition);
+                });
+            }
         }
 
         function createSnowBackground() {
@@ -818,10 +1034,21 @@
             
             console.log('全息粒子系统创建完成，全息粒子数:', CONFIG.hologram.count);
             console.log('========== 全息粒子系统创建完成 ==========');
+            
+            for (let i = 0; i < STATE.textMode.texts.length; i++) {
+                const textPositions = createTextParticlePositions(STATE.textMode.texts[i]);
+                STATE.textMode.textPositions.push(textPositions);
+            }
+            
+            console.log('文字粒子位置预计算完成，共', STATE.textMode.texts.length, '段文字');
         }
 
-        async function createHologramPhotoCylinder() {
+        function createHologramPhotoCylinder() {
             console.log('========== 开始创建全息环绕曲面照片墙 ==========');
+            
+            if (hologramPhotoCylinderGroup) {
+                scene.remove(hologramPhotoCylinderGroup);
+            }
             
             hologramPhotoCylinderGroup = new THREE.Group();
             scene.add(hologramPhotoCylinderGroup);
@@ -1382,8 +1609,83 @@
 
             mainGroup.rotation.y = STATE.rotation.y; mainGroup.rotation.x = STATE.rotation.x; 
             
+            updateTextMode(dt);
+            
             if (galaxySystem && galaxySystem.visible) {
-                bgGroup.rotation.y -= 0.05 * dt; 
+                bgGroup.rotation.y -= 0.05 * dt;
+                
+                if (galaxySystem.userData.meteors) {
+                    const meteors = galaxySystem.userData.meteors;
+                    meteors.forEach(meteor => {
+                        meteor.userData.resetTime += dt;
+                        
+                        if (!meteor.userData.active && meteor.userData.resetTime > 2 + Math.random() * 3) {
+                            meteor.userData.active = true;
+                            meteor.userData.resetTime = 0;
+                            
+                            const angle = Math.random() * Math.PI * 2;
+                            const startRadius = 60 + Math.random() * 20;
+                            meteor.userData.startPos.set(
+                                Math.cos(angle) * startRadius,
+                                20 + Math.random() * 20,
+                                Math.sin(angle) * startRadius
+                            );
+                            
+                            const endAngle = angle + 0.5 + Math.random() * 0.5;
+                            const endRadius = 30 + Math.random() * 10;
+                            meteor.userData.endPos.set(
+                                Math.cos(endAngle) * endRadius,
+                                -10 - Math.random() * 10,
+                                Math.sin(endAngle) * endRadius
+                            );
+                            
+                            const positions = meteor.geometry.attributes.position.array;
+                            const direction = new THREE.Vector3().subVectors(meteor.userData.endPos, meteor.userData.startPos).normalize();
+                            const length = 10 + Math.random() * 20;
+                            
+                            for (let j = 0; j < 2; j++) {
+                                positions[j * 3] = meteor.userData.startPos.x;
+                                positions[j * 3 + 1] = meteor.userData.startPos.y;
+                                positions[j * 3 + 2] = meteor.userData.startPos.z;
+                            }
+                            
+                            for (let j = 2; j < 6; j++) {
+                                const t = (j - 2) / 4;
+                                positions[j * 3] = meteor.userData.startPos.x + direction.x * length * t;
+                                positions[j * 3 + 1] = meteor.userData.startPos.y + direction.y * length * t;
+                                positions[j * 3 + 2] = meteor.userData.startPos.z + direction.z * length * t;
+                            }
+                            
+                            meteor.geometry.attributes.position.needsUpdate = true;
+                            meteor.userData.progress = 0;
+                            meteor.material.opacity = 1.0;
+                        }
+                        
+                        if (meteor.userData.active) {
+                            meteor.userData.progress += dt * meteor.userData.speed;
+                            
+                            if (meteor.userData.progress >= 1) {
+                                meteor.userData.active = false;
+                                meteor.material.opacity = 0;
+                            } else {
+                                const positions = meteor.geometry.attributes.position.array;
+                                const direction = new THREE.Vector3().subVectors(meteor.userData.endPos, meteor.userData.startPos);
+                                const speed = direction.length() * meteor.userData.speed;
+                                
+                                for (let j = 0; j < 6; j++) {
+                                    const t = (j - 2) / 4;
+                                    const newPos = meteor.userData.startPos.clone().add(direction.clone().multiplyScalar(t + meteor.userData.progress));
+                                    positions[j * 3] = newPos.x;
+                                    positions[j * 3 + 1] = newPos.y;
+                                    positions[j * 3 + 2] = newPos.z;
+                                }
+                                
+                                meteor.geometry.attributes.position.needsUpdate = true;
+                                meteor.material.opacity = 1.0 - meteor.userData.progress;
+                            }
+                        }
+                    });
+                }
             } else if (snowSystem && snowSystem.visible) {
                 const positions = snowSystem.geometry.attributes.position.array;
                 const velocities = snowSystem.geometry.attributes.velocity.array;
@@ -1414,7 +1716,7 @@
                 hologramSystem.rotation.y -= 0.3 * dt;
             }
 
-            if (STATE.currentThemeIndex === 2) {
+            if (STATE.currentThemeIndex === 2 && !STATE.textMode.active) {
                 hologramParticleSystem.forEach(p => p.update(dt, STATE.time, STATE.mode, STATE.scatterScale));
                 
                 if (hologramPhotoCylinderGroup && hologramPhotoCylinderGroup.visible && STATE.hologramPhotoWall) {
@@ -1524,14 +1826,27 @@
         function loadDefaultPhotos() {
             if (!STATE.photos || STATE.photos.length === 0) return;
             console.log('Loading default photos:', STATE.photos.length);
+            let loadedCount = 0;
+            
             STATE.photos.forEach((photoPath, index) => {
                 const loader = new THREE.TextureLoader();
                 loader.load(photoPath, (texture) => {
                     texture.colorSpace = THREE.SRGBColorSpace;
                     addPhotoToScene(texture);
-                    console.log(`Loaded photo ${index + 1}/${STATE.photos.length}: ${photoPath}`);
+                    loadedCount++;
+                    console.log(`Loaded photo ${loadedCount}/${STATE.photos.length}: ${photoPath}`);
+                    
+                    if (loadedCount === STATE.photos.length) {
+                        console.log('All photos loaded, creating hologram photo cylinder');
+                        createHologramPhotoCylinder();
+                    }
                 }, undefined, (error) => {
                     console.warn(`Failed to load photo: ${photoPath}`, error);
+                    loadedCount++;
+                    if (loadedCount === STATE.photos.length) {
+                        console.log('All photos loaded (with errors), creating hologram photo cylinder');
+                        createHologramPhotoCylinder();
+                    }
                 });
             });
         }
@@ -1595,39 +1910,21 @@
                 
                 initMediaPipe().catch(console.warn);
                 
-                loadDefaultPhotos();
                 loadDefaultMusic();
-                await createHologramPhotoCylinder();
                 
-                switchTheme(2);
+                setTimeout(() => {
+                    loadDefaultPhotos();
+                }, 1000);
                 
-                await new Promise(resolve => setTimeout(resolve, 1500));
+                setTimeout(() => {
+                    startTextMode();
+                }, 500);
             } catch (error) {
                 console.error('初始化失败:', error);
             }
 
-            const loader = document.getElementById('loader');
-            if (loader) {
-                loader.style.opacity = 0;
-                setTimeout(() => {
-                    if (loader && loader.parentNode) {
-                        loader.remove();
-                    }
-                }, 1200);
-            }
-
             animate(); 
         }
-
-        window.addEventListener('load', () => {
-            setTimeout(() => {
-                const loader = document.getElementById('loader');
-                if (loader && loader.parentNode) {
-                    loader.style.opacity = 0;
-                    setTimeout(() => loader.remove(), 1200);
-                }
-            }, 10000);
-        });
 
         init();
     </script>
