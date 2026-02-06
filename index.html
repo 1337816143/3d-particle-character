@@ -326,8 +326,16 @@
                 
                 return new Promise((resolve, reject) => {
                     const loader = new GLTFLoader();
+                    
+                    let timeoutId = setTimeout(() => {
+                        console.warn('!!! 模型加载超时（30秒），将使用默认圣诞树形状 !!!');
+                        if (loaderText) loaderText.textContent = '使用默认形状...';
+                        resolve([]);
+                    }, 30000);
+                    
                     loader.load('model.glb', 
                         (gltf) => {
+                            clearTimeout(timeoutId);
                             console.log('========== GLB模型加载成功 ==========');
                             console.log('GLTF对象:', gltf);
                             console.log('场景:', gltf.scene);
@@ -401,10 +409,12 @@
                             resolve(vertices);
                         }, 
                         (xhr) => {
+                            clearTimeout(timeoutId);
                             console.log('模型加载进度:', (xhr.loaded / xhr.total * 100) + '%');
                             if (loaderText) loaderText.textContent = '加载模型中... ' + Math.round(xhr.loaded / xhr.total * 100) + '%';
                         },
                         (error) => {
+                            clearTimeout(timeoutId);
                             console.error('!!! GLB模型加载失败:', error);
                             console.error('!!! 错误详情:', error.message || error);
                             console.error('!!! 将使用默认圣诞树形状 !!!');
