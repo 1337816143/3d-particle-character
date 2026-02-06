@@ -822,7 +822,7 @@
         }
 
         async function createHologramPhotoCylinder() {
-            console.log('========== 开始创建全息3D圆筒照片墙 ==========');
+            console.log('========== 开始创建全息曲面屏照片墙 ==========');
             
             hologramPhotoCylinderGroup = new THREE.Group();
             scene.add(hologramPhotoCylinderGroup);
@@ -831,64 +831,111 @@
             const photoCount = photos.length;
             
             if (photoCount === 0) {
-                console.warn('没有可用的照片，跳过圆筒照片墙创建');
+                console.warn('没有可用的照片，跳过曲面屏照片墙创建');
                 return;
             }
             
             const cylinderConfig = CONFIG.hologram.cylinder;
-            const radius = cylinderConfig.radius;
-            const rows = cylinderConfig.rows;
             const photoSize = cylinderConfig.photoSize;
-            const rowSpacing = cylinderConfig.rowSpacing;
             const frameColor = cylinderConfig.frameColor;
             const frameWidth = cylinderConfig.frameWidth;
             const frameOpacity = cylinderConfig.frameOpacity;
             
-            const photosPerRow = Math.ceil(photoCount / rows);
-            const angleStep = Math.PI / photosPerRow;
+            const screenConfig = {
+                width: 60,
+                height: 35,
+                depth: 15,
+                curvature: 0.15
+            };
+            
+            const cols = Math.ceil(Math.sqrt(photoCount));
+            const rows = Math.ceil(photoCount / cols);
+            const photoWidth = screenConfig.width / cols;
+            const photoHeight = screenConfig.height / rows;
+            
+            const curvedScreenGeo = new THREE.PlaneGeometry(screenConfig.width, screenConfig.height, 32, 32);
+            const curvedScreenMat = new THREE.MeshBasicMaterial({
+                color: 0x0a0a1a,
+                transparent: true,
+                opacity: 0.3,
+                side: THREE.BackSide
+            });
+            const curvedScreen = new THREE.Mesh(curvedScreenGeo, curvedScreenMat);
+            curvedScreen.position.set(0, 0, -screenConfig.depth);
+            curvedScreen.renderOrder = 0;
+            hologramPhotoCylinderGroup.add(curvedScreen);
             
             for (let row = 0; row < rows; row++) {
-                const rowGroup = new THREE.Group();
-                rowGroup.userData = { 
-                    rowIndex: row,
-                    rotationDirection: row % 2 === 0 ? 1 : -1,
-                    rotationSpeed: cylinderConfig.rotationSpeed,
-                    baseRotation: 0
-                };
-                
-                const startY = ((rows - 1) * rowSpacing) / 2 - row * rowSpacing;
-                
-                for (let i = 0; i < photosPerRow; i++) {
-                    const photoIndex = row * photosPerRow + i;
+                for (let col = 0; col < cols; col++) {
+                    const photoIndex = row * cols + col;
                     if (photoIndex >= photoCount) break;
                     
-                    const angle = i * angleStep;
-                    const x = Math.cos(angle) * radius;
-                    const z = Math.sin(angle) * radius;
+                    const aspect = photos[photoIndex].width / photos[photoIndex].height;
+                    let displayW, displayH;
+                    if (aspect >= 1) {
+                        displayW = photoWidth;
+                        displayH = photoWidth / aspect;
+                    } else {
+                        displayH = photoHeight;
+                        displayW = photoHeight * aspect;
+                    }
                     
-                    const group = await createHologramPhotoFrame(photos[photoIndex], photoSize, frameColor, frameOpacity, frameWidth);
-                    group.position.set(x, startY, z);
-                    group.lookAt(0, startY, 0);
-                    group.userData = { 
-                        originalPosition: new THREE.Vector3(x, startY, z),
-                        originalRotation: new THREE.Euler(0, -angle, 0),
-                        index: photoIndex,
-                        photoSrc: photos[photoIndex],
-                        rowIndex: row,
-                        angle: angle,
-                        baseAngle: angle
-                    };
-                    
-                    rowGroup.add(group);
+                    const loader = new THREE.TextureLoader();
+                    await new Promise((resolve) => {
+                        loader.load(photos[photoIndex].src, (texture) => {
+                            texture.colorSpace = THREE.SRGBColorSpace;
+                            
+                            const group = new THREE.Group();
+                            
+                            const frameGeo = new THREE.BoxGeometry(displayW + frameWidth, displayH + frameWidth, 0.05);
+                            const frameMat = new THREE.MeshBasicMaterial({
+                                color: frameColor,
+                                transparent: true,
+                                opacity: frameOpacity,
+                                side: THREE.DoubleSide,
+                                depthWrite: true,
+                                depthTest: true
+                            });
+                            const frame = new THREE.Mesh(frameGeo, frameMat);
+                            frame.renderOrder = 1;
+                            group.add(frame);
+                            
+                            const photoMat = new THREE.MeshBasicMaterial({
+                                map: texture,
+                                transparent: false,
+                                opacity: 1.0,
+                                depthWrite: true,
+                                depthTest: true,
+                                side: THREE.FrontSide
+                            });
+                            const photo = new THREE.Mesh(new THREE.PlaneGeometry(displayW, displayH), photoMat);
+                            photo.position.z = 0.04;
+                            photo.renderOrder = 2;
+                            group.add(photo);
+                            
+                            const xPos = (col - (cols - 1) / 2) * photoWidth;
+                            const yPos = (row - (rows - 1) / 2) * photoHeight;
+                            
+                            group.position.set(xPos, yPos, -screenConfig.depth + 0.1);
+                            group.lookAt(0, yPos, -20);
+                            
+                            group.userData = {
+                                originalPosition: new THREE.Vector3(xPos, yPos, -screenConfig.depth - 0.1),
+                                index: photoIndex,
+                                photoSrc: photos[photoIndex].src
+                            };
+                            
+                            hologramPhotoCylinderGroup.add(group);
+                            resolve();
+                        });
+                    });
                 }
-                
-                hologramPhotoCylinderGroup.add(rowGroup);
             }
             
             hologramPhotoCylinderGroup.visible = false;
             
-            console.log('全息3D圆筒照片墙创建完成，照片数量:', photoCount, '行数:', rows, '半径:', radius);
-            console.log('========== 全息3D圆筒照片墙创建完成 ==========');
+            console.log('全息曲面屏照片墙创建完成，照片数量:', photoCount, '网格:', cols, 'x', rows);
+            console.log('========== 全息曲面屏照片墙创建完成 ==========');
         }
 
         async function createHologramPhotoFrame(photoSrc, size, frameColor, frameOpacity, frameWidth = 0.12) {
@@ -1333,51 +1380,42 @@
                 hologramParticleSystem.forEach(p => p.update(dt, STATE.time, STATE.mode, STATE.scatterScale));
                 
                 if (hologramPhotoCylinderGroup && hologramPhotoCylinderGroup.visible) {
-                    hologramPhotoCylinderGroup.children.forEach(rowGroup => {
-                        rowGroup.userData.baseRotation += rowGroup.userData.rotationDirection * rowGroup.userData.rotationSpeed * dt;
-                        rowGroup.children.forEach(photoGroup => {
-                            const currentAngle = photoGroup.userData.baseAngle + rowGroup.userData.baseRotation;
-                            const normalizedAngle = ((currentAngle % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
-                            const isInBackHalf = normalizedAngle >= Math.PI && normalizedAngle <= Math.PI * 2;
+                    hologramPhotoCylinderGroup.children.forEach(photoGroup => {
+                        if (STATE.mode === 'FOCUS' && STATE.focusTarget === photoGroup) {
+                            photoGroup.visible = true;
+                            const targetPos = new THREE.Vector3(0, 0, 8);
+                            photoGroup.position.lerp(targetPos, 6.0 * dt);
+                            photoGroup.scale.lerp(new THREE.Vector3(2.5, 2.5, 2.5), 6.0 * dt);
+                            photoGroup.lookAt(0, 0, 20);
                             
-                            if (STATE.mode === 'FOCUS' && STATE.focusTarget === photoGroup) {
-                                photoGroup.visible = true;
-                                const targetPos = new THREE.Vector3(0, 0, 8);
-                                photoGroup.position.lerp(targetPos, 6.0 * dt);
-                                photoGroup.scale.lerp(new THREE.Vector3(2.5, 2.5, 2.5), 6.0 * dt);
-                                photoGroup.lookAt(0, 0, 20);
-                                
+                            if (photoGroup.children[0]) {
+                                photoGroup.children[0].material.opacity = THREE.MathUtils.lerp(photoGroup.children[0].material.opacity, 0.9, 6.0 * dt);
+                            }
+                            if (photoGroup.children[1]) {
+                                photoGroup.children[1].material.opacity = THREE.MathUtils.lerp(photoGroup.children[1].material.opacity, 1.0, 6.0 * dt);
+                            }
+                        } else {
+                            photoGroup.visible = true;
+                            const originalPos = photoGroup.userData.originalPosition.clone();
+                            photoGroup.position.lerp(originalPos, 6.0 * dt);
+                            photoGroup.scale.lerp(new THREE.Vector3(1, 1, 1), 6.0 * dt);
+                            
+                            if (STATE.mode === 'FOCUS') {
                                 if (photoGroup.children[0]) {
-                                    photoGroup.children[0].material.opacity = THREE.MathUtils.lerp(photoGroup.children[0].material.opacity, 0.9, 6.0 * dt);
+                                    photoGroup.children[0].material.opacity = THREE.MathUtils.lerp(photoGroup.children[0].material.opacity, 0.3, 6.0 * dt);
+                                }
+                                if (photoGroup.children[1]) {
+                                    photoGroup.children[1].material.opacity = THREE.MathUtils.lerp(photoGroup.children[1].material.opacity, 0.7, 6.0 * dt);
+                                }
+                            } else {
+                                if (photoGroup.children[0]) {
+                                    photoGroup.children[0].material.opacity = THREE.MathUtils.lerp(photoGroup.children[0].material.opacity, 0.5, 6.0 * dt);
                                 }
                                 if (photoGroup.children[1]) {
                                     photoGroup.children[1].material.opacity = THREE.MathUtils.lerp(photoGroup.children[1].material.opacity, 1.0, 6.0 * dt);
                                 }
-                            } else {
-                                photoGroup.visible = isInBackHalf;
-                                const originalPos = photoGroup.userData.originalPosition.clone();
-                                originalPos.applyAxisAngle(new THREE.Vector3(0, 1, 0), rowGroup.userData.baseRotation);
-                                photoGroup.position.lerp(originalPos, 6.0 * dt);
-                                photoGroup.scale.lerp(new THREE.Vector3(1, 1, 1), 6.0 * dt);
-                                photoGroup.lookAt(0, photoGroup.position.y, 0);
-                                
-                                if (STATE.mode === 'FOCUS') {
-                                    if (photoGroup.children[0]) {
-                                        photoGroup.children[0].material.opacity = THREE.MathUtils.lerp(photoGroup.children[0].material.opacity, 0.3, 6.0 * dt);
-                                    }
-                                    if (photoGroup.children[1]) {
-                                        photoGroup.children[1].material.opacity = THREE.MathUtils.lerp(photoGroup.children[1].material.opacity, 0.7, 6.0 * dt);
-                                    }
-                                } else {
-                                    if (photoGroup.children[0]) {
-                                        photoGroup.children[0].material.opacity = THREE.MathUtils.lerp(photoGroup.children[0].material.opacity, 0.5, 6.0 * dt);
-                                    }
-                                    if (photoGroup.children[1]) {
-                                        photoGroup.children[1].material.opacity = THREE.MathUtils.lerp(photoGroup.children[1].material.opacity, 1.0, 6.0 * dt);
-                                    }
-                                }
                             }
-                        });
+                        }
                     });
                 }
             } else {
