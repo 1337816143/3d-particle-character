@@ -774,10 +774,10 @@
             STATE.textMode.isTransitioning = false;
             STATE.textMode.transitionProgress = 0;
             
-            galaxySystem.visible = true;
-            snowSystem.visible = false;
-            hologramSystem.visible = false;
-            hologramPhotoCylinderGroup.visible = false;
+            if (galaxySystem) galaxySystem.visible = true;
+            if (snowSystem) snowSystem.visible = false;
+            if (hologramSystem) hologramSystem.visible = false;
+            if (hologramPhotoCylinderGroup) hologramPhotoCylinderGroup.visible = false;
             
             const currentPositions = STATE.textMode.textPositions[0];
             STATE.textMode.currentTextPositions = currentPositions;
@@ -829,7 +829,9 @@
                         }
                     });
                     
-                    switchTheme(2);
+                    if (typeof switchTheme === 'function') {
+                        switchTheme(2);
+                    }
                     return;
                 }
                 
@@ -1185,7 +1187,7 @@
             
             hologramPhotoCylinderGroup.visible = false;
             
-            console.log('全息环绕曲面照片墙创建完成，照片数量:', photoCountOnWall);
+            console.log('全息环绕曲面照片墙创建完成，照片数量:', photoCountToCreate);
             console.log('========== 全息环绕曲面照片墙创建完成 ==========');
         }
 
@@ -1917,8 +1919,10 @@
                 }, 1000);
                 
                 setTimeout(() => {
-                    startTextMode();
-                }, 500);
+                    if (galaxySystem && hologramParticleSystem && hologramParticleSystem.length > 0) {
+                        startTextMode();
+                    }
+                }, 2000);
                 
                 animate();
             } catch (error) {
