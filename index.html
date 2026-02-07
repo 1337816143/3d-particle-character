@@ -433,7 +433,15 @@
             camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 2000);
             camera.position.set(0, 0, CONFIG.camera.z); 
 
-            renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance", depth: true });
+            renderer = new THREE.WebGLRenderer({ 
+                antialias: false, 
+                powerPreference: "high-performance", 
+                depth: true,
+                alpha: false,
+                stencil: false,
+                preserveDrawingBuffer: false,
+                failIfMajorPerformanceCaveat: false
+            });
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
             renderer.toneMapping = THREE.ACESFilmicToneMapping; 
