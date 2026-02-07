@@ -991,7 +991,8 @@
                 totalRows: totalRows,
                 visibleCols: wallConfig.visibleCols,
                 bufferCols: wallConfig.bufferCols,
-                totalCols: wallConfig.totalCols
+                totalCols: wallConfig.totalCols,
+                lerpFactor: 0.1
             };
             
             const wall = STATE.hologramPhotoWall;
@@ -1656,7 +1657,7 @@
                             updatePhotoWallTextures();
                         }
                         
-                        const { meshPool, totalRows, visibleCols, bufferCols, totalCols, rowOffsets, startRowY, rowHeight } = wall;
+                        const { meshPool, totalRows, visibleCols, bufferCols, totalCols, rowOffsets, startRowY, rowHeight, lerpFactor } = wall;
                         
                         for (let row = 0; row < totalRows; row++) {
                             for (let col = 0; col < visibleCols + bufferCols; col++) {
@@ -1668,12 +1669,15 @@
                                 const baseAngle = meshGroup.userData.originalAngle;
                                 const currentAngle = baseAngle + wall.scrollOffset;
                                 
-                                const x = Math.sin(currentAngle) * wall.wallConfig.radius;
-                                const z = -Math.cos(currentAngle) * wall.wallConfig.radius - wall.wallConfig.depth;
-                                const y = meshGroup.userData.originalY;
+                                const targetX = Math.sin(currentAngle) * wall.wallConfig.radius;
+                                const targetZ = -Math.cos(currentAngle) * wall.wallConfig.radius - wall.wallConfig.depth;
+                                const targetY = meshGroup.userData.originalY;
                                 
-                                meshGroup.position.set(x, y, z);
-                                meshGroup.lookAt(0, y, 0);
+                                meshGroup.position.x = THREE.MathUtils.lerp(meshGroup.position.x, targetX, lerpFactor);
+                                meshGroup.position.y = THREE.MathUtils.lerp(meshGroup.position.y, targetY, lerpFactor);
+                                meshGroup.position.z = THREE.MathUtils.lerp(meshGroup.position.z, targetZ, lerpFactor);
+                                
+                                meshGroup.lookAt(0, targetY, 0);
                                 meshGroup.scale.set(1, 1, 1);
                                 meshGroup.visible = col < visibleCols;
                             }
