@@ -433,32 +433,44 @@
             camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 2000);
             camera.position.set(0, 0, CONFIG.camera.z); 
 
-            try {
-                renderer = new THREE.WebGLRenderer({ 
-                    antialias: false, 
-                    powerPreference: "high-performance", 
-                    depth: true,
-                    alpha: false,
-                    stencil: false,
-                    preserveDrawingBuffer: false,
-                    failIfMajorPerformanceCaveat: false,
-                    logarithmicDepthBuffer: false,
-                    precision: 'mediump'
-                });
-            } catch (error) {
-                console.error('WebGL创建失败，尝试使用低精度模式:', error);
-                renderer = new THREE.WebGLRenderer({ 
-                    antialias: false, 
-                    powerPreference: "low-power", 
-                    depth: true,
-                    alpha: false,
-                    stencil: false,
-                    preserveDrawingBuffer: false,
-                    failIfMajorPerformanceCaveat: false,
-                    logarithmicDepthBuffer: false,
-                    precision: 'lowp'
-                });
+            const canvas = document.createElement('canvas');
+            const gl = canvas.getContext('webgl2') || canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+            
+            if (!gl) {
+                document.getElementById('loader').innerHTML = `
+                    <div style="text-align:center; padding:50px; color:#fff;">
+                        <h2 style="color:#ff6b6b; margin-bottom:20px;">WebGL不支持</h2>
+                        <p style="font-size:16px; line-height:1.6;">您的浏览器不支持WebGL，无法显示3D效果。</p>
+                        <p style="font-size:14px; color:#aaa;">请尝试以下解决方案：</p>
+                        <ul style="text-align:left; color:#ccc; font-size:14px; line-height:2;">
+                            <li>使用最新版本的Chrome、Edge或Firefox浏览器</li>
+                            <li>确保浏览器硬件加速已启用</li>
+                            <li>禁用浏览器扩展（特别是广告拦截器）</li>
+                            <li>避免使用隐私模式或无痕模式</li>
+                            <li>更新显卡驱动到最新版本</li>
+                        </ul>
+                        <p style="font-size:14px; color:#ff6b6b; margin-top:20px;">如果问题仍然存在，请联系技术支持。</p>
+                    </div>
+                `;
+                document.getElementById('loader').style.background = 'rgba(0,0,0,0.95)';
+                throw new Error('WebGL not supported');
             }
+            
+            canvas.remove();
+            
+            renderer = new THREE.WebGLRenderer({ 
+                antialias: false, 
+                powerPreference: "high-performance", 
+                depth: true,
+                alpha: false,
+                stencil: false,
+                preserveDrawingBuffer: false,
+                failIfMajorPerformanceCaveat: false,
+                logarithmicDepthBuffer: false,
+                precision: 'mediump',
+                desynchronized: false,
+                premultipliedAlpha: false
+            });
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
             renderer.toneMapping = THREE.ACESFilmicToneMapping; 
