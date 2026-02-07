@@ -929,7 +929,8 @@
                 scrollSpeed: 0.2,
                 photoHeight: 10,
                 photoWidth: 15,
-                maxRows: 5
+                maxRows: 5,
+                gapX: 0.5
             };
             
             const curvedWallGeo = new THREE.CylinderGeometry(
@@ -957,20 +958,26 @@
             
             const photoWidth = wallConfig.photoWidth;
             const photoHeight = wallConfig.photoHeight;
+            const gapX = wallConfig.gapX;
             
-            const arcPerPhoto = photoWidth / wallConfig.radius * 0.95;
-            const photosPerRow = Math.floor(wallConfig.arcAngle / arcPerPhoto);
+            const totalPhotos = photoCount;
             const totalRows = wallConfig.maxRows;
+            const photosPerRow = Math.ceil(totalPhotos / totalRows);
+            const totalGridPositions = totalRows * photosPerRow;
+            
+            const photoWithGap = photoWidth + gapX;
+            const arcPerPhoto = photoWithGap / wallConfig.radius;
+            
             const rowHeight = photoHeight * 1.2;
             const totalHeight = totalRows * rowHeight;
             const startRowY = -totalHeight / 2 + rowHeight / 2;
             
             const rowOffsets = [];
             for (let r = 0; r < totalRows; r++) {
-                rowOffsets.push((r % 2 === 0 ? 0.5 : -0.5) * arcPerPhoto * 0.5);
+                rowOffsets.push((r % 2 === 0 ? 0.5 : -0.5) * gapX / wallConfig.radius);
             }
             
-            const totalGridPositions = totalRows * photosPerRow;
+            const photoTextureCache = new Map();
             
             STATE.hologramPhotoWall = {
                 photos: [],
@@ -978,70 +985,86 @@
                 isScrolling: true,
                 wallConfig: wallConfig,
                 allPhotos: photos,
-                totalPhotos: photoCount,
+                totalPhotos: totalPhotos,
                 photosPerRow: photosPerRow,
-                totalGridPositions: totalGridPositions
+                totalGridPositions: totalGridPositions,
+                arcPerPhoto: arcPerPhoto,
+                photoTextureCache: photoTextureCache
             };
             
             for (let i = 0; i < totalGridPositions; i++) {
                 const row = Math.floor(i / photosPerRow);
                 const col = i % photosPerRow;
-                const loader = new THREE.TextureLoader();
+                const photoIndex = i % totalPhotos;
+                
+                const group = new THREE.Group();
+                
+                const aspect = 1.0;
+                const actualPhotoHeight = photoHeight;
+                const actualPhotoWidth = actualPhotoHeight * aspect;
+                
+                const photoMat = new THREE.MeshBasicMaterial({
+                    transparent: false,
+                    opacity: 1.0,
+                    depthWrite: true,
+                    depthTest: true,
+                    side: THREE.FrontSide
+                });
+                const photo = new THREE.Mesh(new THREE.PlaneGeometry(actualPhotoWidth, actualPhotoHeight), photoMat);
+                photo.position.z = 0.1;
+                photo.renderOrder = 2;
+                group.add(photo);
+                
+                const angle = -wallConfig.arcAngle / 2 + col * arcPerPhoto + arcPerPhoto / 2 + rowOffsets[row];
+                const x = Math.sin(angle) * wallConfig.radius;
+                const z = -Math.cos(angle) * wallConfig.radius - wallConfig.depth;
+                const y = startRowY + row * rowHeight;
+                
+                group.position.set(x, y, z);
+                group.lookAt(0, y, 0);
+                
+                group.userData = {
+                    originalAngle: angle,
+                    originalX: x,
+                    originalY: y,
+                    originalZ: z,
+                    gridIndex: i,
+                    row: row,
+                    col: col,
+                    photoIndex: photoIndex,
+                    photoSrc: photos[photoIndex],
+                    width: actualPhotoWidth,
+                    height: actualPhotoHeight,
+                    currentPhotoIndex: photoIndex
+                };
+                
+                hologramPhotoCylinderGroup.add(group);
+                STATE.hologramPhotoWall.photos.push(group);
+            }
+            
+            const textureLoader = new THREE.TextureLoader();
+            for (let i = 0; i < totalPhotos; i++) {
                 await new Promise((resolve) => {
-                    loader.load(photos[i % photoCount], (texture) => {
-                            texture.colorSpace = THREE.SRGBColorSpace;
-                            
-                            const aspect = texture.image.width / texture.image.height;
-                            const actualPhotoHeight = photoHeight;
-                            const actualPhotoWidth = actualPhotoHeight * aspect;
-                            
-                            const group = new THREE.Group();
-                            
-                            const photoMat = new THREE.MeshBasicMaterial({
-                                map: texture,
-                                transparent: false,
-                                opacity: 1.0,
-                                depthWrite: true,
-                                depthTest: true,
-                                side: THREE.FrontSide
-                            });
-                            const photo = new THREE.Mesh(new THREE.PlaneGeometry(actualPhotoWidth, actualPhotoHeight), photoMat);
-                            photo.position.z = 0.1;
-                            photo.renderOrder = 2;
-                            group.add(photo);
-                        
-                        const angle = -wallConfig.arcAngle / 2 + col * arcPerPhoto + arcPerPhoto / 2 + rowOffsets[row];
-                        const x = Math.sin(angle) * wallConfig.radius;
-                        const z = -Math.cos(angle) * wallConfig.radius - wallConfig.depth;
-                        const y = startRowY + row * rowHeight;
-                        
-                        group.position.set(x, y, z);
-                        group.lookAt(0, y, 0);
-                        
-                        group.userData = {
-                            originalAngle: angle,
-                            originalX: x,
-                            originalY: y,
-                            originalZ: z,
-                            gridIndex: i,
-                            row: row,
-                            col: col,
-                            photoIndex: i % photoCount,
-                            photoSrc: photos[i % photoCount],
-                            width: actualPhotoWidth,
-                            height: actualPhotoHeight
-                        };
-                        
-                        hologramPhotoCylinderGroup.add(group);
-                        STATE.hologramPhotoWall.photos.push(group);
+                    textureLoader.load(photos[i], (texture) => {
+                        texture.colorSpace = THREE.SRGBColorSpace;
+                        photoTextureCache.set(i, texture);
                         resolve();
                     });
                 });
             }
             
+            STATE.hologramPhotoWall.photos.forEach((group) => {
+                const photoIndex = group.userData.photoIndex;
+                const texture = photoTextureCache.get(photoIndex);
+                if (texture && group.children[0] && group.children[0].material) {
+                    group.children[0].material.map = texture;
+                    group.children[0].material.needsUpdate = true;
+                }
+            });
+            
             hologramPhotoCylinderGroup.visible = false;
             
-            console.log('全息环绕曲面照片墙创建完成，照片数量:', photoCountToCreate);
+            console.log('全息环绕曲面照片墙创建完成，照片数量:', totalPhotos);
             console.log('========== 全息环绕曲面照片墙创建完成 ==========');
         }
 
@@ -1586,45 +1609,46 @@
                     } else {
                         wall.isScrolling = true;
                         
-                        wall.scrollOffset += wall.wallConfig.scrollSpeed * dt;
-                        
+                        const scrollSpeed = wall.wallConfig.scrollSpeed;
                         const arcAngle = wall.wallConfig.arcAngle;
+                        const radius = wall.wallConfig.radius;
+                        const depth = wall.wallConfig.depth;
                         const photosPerRow = wall.photosPerRow;
                         const totalPhotos = wall.totalPhotos;
-                        const totalGridPositions = wall.totalGridPositions;
-                        const arcPerPhoto = arcAngle / photosPerRow;
+                        const arcPerPhoto = wall.arcPerPhoto;
+                        const totalArcWidth = photosPerRow * arcPerPhoto;
                         
-                        const totalShift = Math.floor(wall.scrollOffset / arcPerPhoto);
+                        wall.scrollOffset += scrollSpeed * dt;
+                        
+                        const normalizedOffset = wall.scrollOffset % totalArcWidth;
                         
                         wall.photos.forEach((photoGroup, gridIndex) => {
                             const userData = photoGroup.userData;
                             if (!userData || userData.originalAngle === undefined) return;
                             
-                            const effectivePhotoIndex = (userData.gridIndex + totalShift) % totalPhotos;
+                            const baseAngle = userData.originalAngle;
+                            const currentAngle = baseAngle + normalizedOffset;
+                            
+                            const x = Math.sin(currentAngle) * radius;
+                            const z = -Math.cos(currentAngle) * radius - depth;
+                            
+                            photoGroup.position.set(x, userData.originalY, z);
+                            photoGroup.lookAt(0, userData.originalY, 0);
+                            photoGroup.scale.set(1, 1, 1);
+                            
+                            const effectivePhotoIndex = (userData.gridIndex + Math.floor(wall.scrollOffset / arcPerPhoto)) % totalPhotos;
                             
                             if (userData.currentPhotoIndex !== effectivePhotoIndex) {
                                 userData.currentPhotoIndex = effectivePhotoIndex;
                                 userData.photoIndex = effectivePhotoIndex;
                                 
-                                const loader = new THREE.TextureLoader();
-                                loader.load(wall.allPhotos[effectivePhotoIndex], (texture) => {
-                                    texture.colorSpace = THREE.SRGBColorSpace;
-                                    if (photoGroup.children[0] && photoGroup.children[0].material) {
-                                        photoGroup.children[0].material.map = texture;
-                                        photoGroup.children[0].material.needsUpdate = true;
-                                    }
-                                });
+                                const texture = wall.photoTextureCache.get(effectivePhotoIndex);
+                                if (texture && photoGroup.children[0] && photoGroup.children[0].material) {
+                                    photoGroup.children[0].material.map = texture;
+                                    photoGroup.children[0].material.needsUpdate = true;
+                                }
                             }
                             
-                            const baseAngle = userData.originalAngle;
-                            const currentAngle = baseAngle + (wall.scrollOffset % arcPerPhoto);
-                            
-                            const x = Math.sin(currentAngle) * wall.wallConfig.radius;
-                            const z = -Math.cos(currentAngle) * wall.wallConfig.radius - wall.wallConfig.depth;
-                            
-                            photoGroup.position.set(x, userData.originalY, z);
-                            photoGroup.lookAt(0, userData.originalY, 0);
-                            photoGroup.scale.set(1, 1, 1);
                             photoGroup.visible = true;
                         });
                     }
