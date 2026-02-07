@@ -973,16 +973,20 @@
             }
             
             const maxPhotos = totalRows * photosPerRow;
-            const photoCountToCreate = Math.min(photoCount, maxPhotos);
             
             STATE.hologramPhotoWall = {
                 photos: [],
                 scrollOffset: 0,
                 isScrolling: true,
-                wallConfig: wallConfig
+                wallConfig: wallConfig,
+                totalPhotos: photoCount,
+                photosPerRow: photosPerRow,
+                maxRows: totalRows,
+                arcPerPhoto: arcPerPhoto,
+                rowOffsets: rowOffsets
             };
             
-            for (let i = 0; i < photoCountToCreate; i++) {
+            for (let i = 0; i < photoCount; i++) {
                 const row = Math.floor(i / photosPerRow);
                 const col = i % photosPerRow;
                 const loader = new THREE.TextureLoader();
@@ -1039,7 +1043,7 @@
             
             hologramPhotoCylinderGroup.visible = false;
             
-            console.log('全息环绕曲面照片墙创建完成，照片数量:', photoCountToCreate);
+            console.log('全息环绕曲面照片墙创建完成，照片数量:', photoCount);
             console.log('========== 全息环绕曲面照片墙创建完成 ==========');
         }
 
