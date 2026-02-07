@@ -433,15 +433,32 @@
             camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 2000);
             camera.position.set(0, 0, CONFIG.camera.z); 
 
-            renderer = new THREE.WebGLRenderer({ 
-                antialias: false, 
-                powerPreference: "high-performance", 
-                depth: true,
-                alpha: false,
-                stencil: false,
-                preserveDrawingBuffer: false,
-                failIfMajorPerformanceCaveat: false
-            });
+            try {
+                renderer = new THREE.WebGLRenderer({ 
+                    antialias: false, 
+                    powerPreference: "high-performance", 
+                    depth: true,
+                    alpha: false,
+                    stencil: false,
+                    preserveDrawingBuffer: false,
+                    failIfMajorPerformanceCaveat: false,
+                    logarithmicDepthBuffer: false,
+                    precision: 'mediump'
+                });
+            } catch (error) {
+                console.error('WebGL创建失败，尝试使用低精度模式:', error);
+                renderer = new THREE.WebGLRenderer({ 
+                    antialias: false, 
+                    powerPreference: "low-power", 
+                    depth: true,
+                    alpha: false,
+                    stencil: false,
+                    preserveDrawingBuffer: false,
+                    failIfMajorPerformanceCaveat: false,
+                    logarithmicDepthBuffer: false,
+                    precision: 'lowp'
+                });
+            }
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
             renderer.toneMapping = THREE.ACESFilmicToneMapping; 
