@@ -986,12 +986,13 @@
                 rowOffsets: rowOffsets
             };
             
-            for (let i = 0; i < photoCount; i++) {
+            for (let i = 0; i < maxPhotos; i++) {
+                const photoIndex = i % photoCount;
                 const row = Math.floor(i / photosPerRow);
                 const col = i % photosPerRow;
                 const loader = new THREE.TextureLoader();
                 await new Promise((resolve) => {
-                    loader.load(photos[i], (texture) => {
+                    loader.load(photos[photoIndex], (texture) => {
                             texture.colorSpace = THREE.SRGBColorSpace;
                             
                             const aspect = texture.image.width / texture.image.height;
@@ -1026,8 +1027,8 @@
                             originalX: x,
                             originalY: y,
                             originalZ: z,
-                            index: i,
-                            photoSrc: photos[i],
+                            index: photoIndex,
+                            photoSrc: photos[photoIndex],
                             width: actualPhotoWidth,
                             height: actualPhotoHeight,
                             row: row,
