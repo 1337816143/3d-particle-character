@@ -929,10 +929,7 @@
                 scrollSpeed: 0.2,
                 photoHeight: 10,
                 photoWidth: 15,
-                maxRows: 5,
-                visibleCols: 9,
-                bufferCols: 2,
-                totalCols: 11
+                maxRows: 5
             };
             
             const curvedWallGeo = new THREE.CylinderGeometry(
@@ -958,11 +955,14 @@
             curvedWall.visible = false;
             hologramPhotoCylinderGroup.add(curvedWall);
             
+            const totalArcLength = wallConfig.radius * wallConfig.arcAngle;
+            
             const photoWidth = wallConfig.photoWidth;
             const photoHeight = wallConfig.photoHeight;
             
             const arcPerPhoto = photoWidth / wallConfig.radius * 0.85;
-            const totalRows = wallConfig.maxRows;
+            const photosPerRow = Math.floor(wallConfig.arcAngle / arcPerPhoto);
+            const totalRows = Math.min(Math.ceil(photoCount / photosPerRow), wallConfig.maxRows);
             const rowHeight = photoHeight * 1.2;
             const totalHeight = totalRows * rowHeight;
             const startRowY = -totalHeight / 2 + rowHeight / 2;
@@ -972,137 +972,75 @@
                 rowOffsets.push((r % 2 === 0 ? 0.5 : -0.5) * arcPerPhoto * 0.5);
             }
             
-            const visiblePhotos = totalRows * wallConfig.visibleCols;
-            const bufferPhotos = totalRows * wallConfig.bufferCols;
-            const totalMeshes = totalRows * wallConfig.totalCols;
+            const maxPhotos = totalRows * photosPerRow;
+            const photoCountToCreate = Math.min(photoCount, maxPhotos);
             
             STATE.hologramPhotoWall = {
-                photos: photos,
-                photoCount: photoCount,
-                meshPool: [],
-                currentStartIndex: 0,
+                photos: [],
                 scrollOffset: 0,
                 isScrolling: true,
-                wallConfig: wallConfig,
-                arcPerPhoto: arcPerPhoto,
-                rowOffsets: rowOffsets,
-                startRowY: startRowY,
-                rowHeight: rowHeight,
-                totalRows: totalRows,
-                visibleCols: wallConfig.visibleCols,
-                bufferCols: wallConfig.bufferCols,
-                totalCols: wallConfig.totalCols
+                wallConfig: wallConfig
             };
             
-            const wall = STATE.hologramPhotoWall;
-            
-            for (let row = 0; row < totalRows; row++) {
-                for (let col = 0; col < wallConfig.totalCols; col++) {
-                    const photoIndex = row * wallConfig.totalCols + col;
-                    const group = new THREE.Group();
-                    
-                    const placeholderMat = new THREE.MeshBasicMaterial({
-                        color: 0x000000,
-                        transparent: true,
-                        opacity: 0.0,
-                        depthWrite: true,
-                        depthTest: true,
-                        side: THREE.FrontSide
+            for (let i = 0; i < photoCountToCreate; i++) {
+                const row = Math.floor(i / photosPerRow);
+                const col = i % photosPerRow;
+                const loader = new THREE.TextureLoader();
+                await new Promise((resolve) => {
+                    loader.load(photos[i], (texture) => {
+                            texture.colorSpace = THREE.SRGBColorSpace;
+                            
+                            const aspect = texture.image.width / texture.image.height;
+                            const actualPhotoHeight = photoHeight;
+                            const actualPhotoWidth = actualPhotoHeight * aspect;
+                            
+                            const group = new THREE.Group();
+                            
+                            const photoMat = new THREE.MeshBasicMaterial({
+                                map: texture,
+                                transparent: false,
+                                opacity: 1.0,
+                                depthWrite: true,
+                                depthTest: true,
+                                side: THREE.FrontSide
+                            });
+                            const photo = new THREE.Mesh(new THREE.PlaneGeometry(actualPhotoWidth, actualPhotoHeight), photoMat);
+                            photo.position.z = 0.1;
+                            photo.renderOrder = 2;
+                            group.add(photo);
+                        
+                        const angle = -wallConfig.arcAngle / 2 + col * arcPerPhoto + arcPerPhoto / 2 + rowOffsets[row];
+                        const x = Math.sin(angle) * wallConfig.radius;
+                        const z = -Math.cos(angle) * wallConfig.radius - wallConfig.depth;
+                        const y = startRowY + row * rowHeight;
+                        
+                        group.position.set(x, y, z);
+                        group.lookAt(0, y, 0);
+                        
+                        group.userData = {
+                            originalAngle: angle,
+                            originalX: x,
+                            originalY: y,
+                            originalZ: z,
+                            index: i,
+                            photoSrc: photos[i],
+                            width: actualPhotoWidth,
+                            height: actualPhotoHeight,
+                            row: row,
+                            col: col
+                        };
+                        
+                        hologramPhotoCylinderGroup.add(group);
+                        STATE.hologramPhotoWall.photos.push(group);
+                        resolve();
                     });
-                    const placeholder = new THREE.Mesh(new THREE.PlaneGeometry(photoWidth, photoHeight), placeholderMat);
-                    placeholder.position.z = 0.1;
-                    placeholder.renderOrder = 2;
-                    group.add(placeholder);
-                    
-                    const angle = -wallConfig.arcAngle / 2 + col * arcPerPhoto + arcPerPhoto / 2 + rowOffsets[row];
-                    const x = Math.sin(angle) * wallConfig.radius;
-                    const z = -Math.cos(angle) * wallConfig.radius - wallConfig.depth;
-                    const y = startRowY + row * rowHeight;
-                    
-                    group.position.set(x, y, z);
-                    group.lookAt(0, y, 0);
-                    
-                    group.userData = {
-                        originalAngle: angle,
-                        originalX: x,
-                        originalY: y,
-                        originalZ: z,
-                        row: row,
-                        col: col,
-                        photoIndex: photoIndex,
-                        currentPhotoIndex: -1,
-                        placeholder: placeholder,
-                        photoMesh: null
-                    };
-                    
-                    hologramPhotoCylinderGroup.add(group);
-                    wall.meshPool.push(group);
-                }
+                });
             }
-            
-            await updatePhotoWallTextures();
             
             hologramPhotoCylinderGroup.visible = false;
             
-            console.log('全息环绕曲面照片墙创建完成，照片数量:', photoCount, 'Mesh缓存池:', totalMeshes);
+            console.log('全息环绕曲面照片墙创建完成，照片数量:', photoCountToCreate);
             console.log('========== 全息环绕曲面照片墙创建完成 ==========');
-        }
-
-        async function updatePhotoWallTextures() {
-            const wall = STATE.hologramPhotoWall;
-            if (!wall) return;
-            
-            const { currentStartIndex, photoCount, totalRows, visibleCols, bufferCols, meshPool } = wall;
-            
-            for (let row = 0; row < totalRows; row++) {
-                for (let col = 0; col < visibleCols + bufferCols; col++) {
-                    const poolIndex = row * wall.totalCols + col;
-                    const meshGroup = meshPool[poolIndex];
-                    
-                    const photoIndex = (currentStartIndex + row * visibleCols + col) % photoCount;
-                    
-                    if (meshGroup.userData.currentPhotoIndex !== photoIndex) {
-                        const photoPath = wall.photos[photoIndex];
-                        
-                        if (meshGroup.userData.photoMesh) {
-                            meshGroup.remove(meshGroup.userData.photoMesh);
-                            meshGroup.userData.photoMesh.geometry.dispose();
-                            meshGroup.userData.photoMesh.material.dispose();
-                            meshGroup.userData.photoMesh = null;
-                        }
-                        
-                        const loader = new THREE.TextureLoader();
-                        await new Promise((resolve) => {
-                            loader.load(photoPath, (texture) => {
-                                texture.colorSpace = THREE.SRGBColorSpace;
-                                
-                                const aspect = texture.image.width / texture.image.height;
-                                const actualPhotoHeight = wall.wallConfig.photoHeight;
-                                const actualPhotoWidth = actualPhotoHeight * aspect;
-                                
-                                const photoMat = new THREE.MeshBasicMaterial({
-                                    map: texture,
-                                    transparent: false,
-                                    opacity: 1.0,
-                                    depthWrite: true,
-                                    depthTest: true,
-                                    side: THREE.FrontSide
-                                });
-                                const photo = new THREE.Mesh(new THREE.PlaneGeometry(actualPhotoWidth, actualPhotoHeight), photoMat);
-                                photo.position.z = 0.1;
-                                photo.renderOrder = 2;
-                                
-                                meshGroup.add(photo);
-                                meshGroup.userData.photoMesh = photo;
-                                meshGroup.userData.currentPhotoIndex = photoIndex;
-                                meshGroup.userData.placeholder.visible = false;
-                                
-                                resolve();
-                            });
-                        });
-                    }
-                }
-            }
         }
 
         async function createHologramPhotoFrame(photoSrc, size, frameColor, frameOpacity, frameWidth = 0.12) {
@@ -1648,36 +1586,29 @@
                         
                         wall.scrollOffset += wall.wallConfig.scrollSpeed * dt;
                         
-                        const photoWidthWithSpacing = wall.arcPerPhoto;
+                        const arcAngle = wall.wallConfig.arcAngle;
+                        const normalizedOffset = wall.scrollOffset % arcAngle;
                         
-                        if (wall.scrollOffset >= photoWidthWithSpacing) {
-                            wall.scrollOffset -= photoWidthWithSpacing;
-                            wall.currentStartIndex = (wall.currentStartIndex + 1) % wall.photoCount;
-                            updatePhotoWallTextures();
-                        }
-                        
-                        const { meshPool, totalRows, visibleCols, bufferCols, totalCols, rowOffsets, startRowY, rowHeight } = wall;
-                        
-                        for (let row = 0; row < totalRows; row++) {
-                            for (let col = 0; col < visibleCols + bufferCols; col++) {
-                                const poolIndex = row * totalCols + col;
-                                const meshGroup = meshPool[poolIndex];
-                                
-                                if (!meshGroup || !meshGroup.userData || meshGroup.userData.originalAngle === undefined) continue;
-                                
-                                const baseAngle = meshGroup.userData.originalAngle;
-                                const currentAngle = baseAngle + wall.scrollOffset;
-                                
-                                const x = Math.sin(currentAngle) * wall.wallConfig.radius;
-                                const z = -Math.cos(currentAngle) * wall.wallConfig.radius - wall.wallConfig.depth;
-                                const y = meshGroup.userData.originalY;
-                                
-                                meshGroup.position.set(x, y, z);
-                                meshGroup.lookAt(0, y, 0);
-                                meshGroup.scale.set(1, 1, 1);
-                                meshGroup.visible = col < visibleCols;
+                        wall.photos.forEach((photoGroup, index) => {
+                            const userData = photoGroup.userData;
+                            if (!userData || userData.originalAngle === undefined) return;
+                            
+                            let currentAngle = userData.originalAngle + normalizedOffset;
+                            
+                            if (currentAngle > arcAngle / 2) {
+                                currentAngle -= arcAngle;
+                            } else if (currentAngle < -arcAngle / 2) {
+                                currentAngle += arcAngle;
                             }
-                        }
+                            
+                            const x = Math.sin(currentAngle) * wall.wallConfig.radius;
+                            const z = -Math.cos(currentAngle) * wall.wallConfig.radius - wall.wallConfig.depth;
+                            
+                            photoGroup.position.set(x, userData.originalY, z);
+                            photoGroup.lookAt(0, userData.originalY, 0);
+                            photoGroup.scale.set(1, 1, 1);
+                            photoGroup.visible = true;
+                        });
                     }
                 }
             } else {
