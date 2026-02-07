@@ -915,6 +915,8 @@
                 return;
             }
             
+            const shuffledPhotos = [...photos].sort(() => Math.random() - 0.5);
+            
             const cylinderConfig = CONFIG.hologram.cylinder;
             const frameColor = cylinderConfig.frameColor;
             const frameWidth = cylinderConfig.frameWidth;
@@ -992,7 +994,7 @@
                 const col = i % photosPerRow;
                 const loader = new THREE.TextureLoader();
                 await new Promise((resolve) => {
-                    loader.load(photos[photoIndex], (texture) => {
+                    loader.load(shuffledPhotos[photoIndex], (texture) => {
                             texture.colorSpace = THREE.SRGBColorSpace;
                             
                             const aspect = texture.image.width / texture.image.height;
@@ -1028,7 +1030,7 @@
                             originalY: y,
                             originalZ: z,
                             index: photoIndex,
-                            photoSrc: photos[photoIndex],
+                            photoSrc: shuffledPhotos[photoIndex],
                             width: actualPhotoWidth,
                             height: actualPhotoHeight,
                             row: row,
