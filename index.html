@@ -22,6 +22,11 @@
         @keyframes spin { 100% { transform: rotate(360deg); } }
         #loader-text { color: #d4af37; font-size: 14px; font-family: 'Cinzel', serif; }
 
+        #status-messages { position: absolute; top: 20px; left: 20px; z-index: 50; display: flex; flex-direction: column; gap: 10px; pointer-events: none; }
+        .status-message { color: #d4af37; font-size: 14px; font-family: 'Cinzel', serif; text-shadow: 0 0 10px rgba(212, 175, 55, 0.5); opacity: 0; transform: translateX(-20px); transition: opacity 0.5s ease, transform 0.5s ease; }
+        .status-message.show { opacity: 1; transform: translateX(0); }
+        .status-message.fade-out { opacity: 0; transform: translateX(-20px); }
+
         #top-right-controls { position: absolute; top: 20px; right: 20px; z-index: 30; display: flex; flex-direction: row; gap: 15px; pointer-events: auto; }
         .control-col { display: flex; flex-direction: column; gap: 15px; }
         
@@ -71,6 +76,7 @@
         <div class="spinner"></div>
         <div id="loader-text">加载模型中...</div>
     </div>
+    <div id="status-messages"></div>
     <div id="canvas-container"></div>
 
     <div id="ui-layer">
@@ -302,9 +308,34 @@
         const _targetVec = new THREE.Vector3();
         const _invMatrix = new THREE.Matrix4();
 
+        function showStatusMessage(message, duration = 2500) {
+            const container = document.getElementById('status-messages');
+            if (!container) return;
+
+            const messageEl = document.createElement('div');
+            messageEl.className = 'status-message';
+            messageEl.textContent = message;
+            container.appendChild(messageEl);
+
+            requestAnimationFrame(() => {
+                messageEl.classList.add('show');
+            });
+
+            setTimeout(() => {
+                messageEl.classList.remove('show');
+                messageEl.classList.add('fade-out');
+                setTimeout(() => {
+                    if (container.contains(messageEl)) {
+                        container.removeChild(messageEl);
+                    }
+                }, 500);
+            }, duration);
+        }
+
         async function loadGLBModelFromBase64() {
             try {
                 console.log('========== 开始加载GLB模型 ==========');
+                showStatusMessage('正在加载模型...');
                 const loaderText = document.getElementById('loader-text');
                 if (loaderText) loaderText.textContent = '读取模型文件...';
                 
@@ -392,6 +423,7 @@
                             console.log('顶点变换完成');
                             console.log('!!! 模型顶点加载成功，粒子将使用人物模型形状 !!!');
                             console.log('========== 模型加载完成 ==========');
+                            showStatusMessage('模型加载完成');
                             resolve(vertices);
                         }, 
                         (xhr) => {
@@ -628,11 +660,13 @@
             
             const loaderText = document.getElementById('loader-text');
             if (loaderText) loaderText.textContent = '创建粒子...';
+            showStatusMessage('正在创建粒子系统...');
 
             await createHologramParticleSystem();
             
             console.log('粒子系统创建完成');
             console.log('========== 粒子系统创建完成 ==========');
+            showStatusMessage('粒子系统创建完成');
         }
 
         async function createHologramParticleSystem() {
@@ -703,6 +737,7 @@
 
         async function createHologramPhotoCylinder() {
             console.log('========== 开始创建全息环绕曲面照片墙 ==========');
+            showStatusMessage('正在加载照片...');
             
             if (hologramPhotoCylinderGroup) {
                 scene.remove(hologramPhotoCylinderGroup);
@@ -873,6 +908,7 @@
             
             console.log('全息环绕曲面照片墙创建完成，照片数量:', photoCount);
             console.log('========== 全息环绕曲面照片墙创建完成 ==========');
+            showStatusMessage('照片加载完成');
             
             loadDefaultMusic();
         }
@@ -1009,6 +1045,7 @@
             
             console.log('全息环绕曲面照片墙创建完成，照片数量:', photoCount);
             console.log('========== 全息环绕曲面照片墙创建完成 ==========');
+            showStatusMessage('照片加载完成');
         }
 
         async function createHologramPhotoFrame(photoSrc, size, frameColor, frameOpacity, frameWidth = 0.12) {
@@ -1152,6 +1189,8 @@
         }
 
         async function initMediaPipe() {
+            console.log('========== 开始初始化手势识别 ==========');
+            showStatusMessage('正在初始化手势识别...');
             const vision = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm");
             handLandmarker = await HandLandmarker.createFromOptions(vision, { baseOptions: { modelAssetPath: `https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task`, delegate: "GPU" }, runningMode: "VIDEO", numHands: 1 });
             video = document.getElementById('webcam'); canvasCtx = document.getElementById('webcam-preview').getContext('2d'); drawingUtils = new DrawingUtils(canvasCtx);
@@ -1166,6 +1205,7 @@
                     document.getElementById('webcam-wrapper').style.height = (120/aspect) + 'px';
                     document.getElementById('webcam-preview').width = video.videoWidth;
                     document.getElementById('webcam-preview').height = video.videoHeight;
+                    showStatusMessage('手势识别初始化完成');
                     predictWebcam(); 
                 });
             }
@@ -1440,6 +1480,7 @@
         function loadDefaultMusic() {
             if (!STATE.musicData || STATE.musicData.length === 0) return;
             console.log('Loading default music:', STATE.musicData.length);
+            showStatusMessage('正在加载音乐...');
             const audioEl = document.getElementById('bg-music');
             
             function playNextMusic() {
@@ -1452,6 +1493,7 @@
                 if (playPromise !== undefined) {
                     playPromise.then(() => {
                         console.log('Music started playing successfully');
+                        showStatusMessage('音乐加载完成');
                     }).catch(error => {
                         console.warn('Failed to play music:', error);
                         setTimeout(() => {
@@ -1505,6 +1547,8 @@
                         }
                     }, 1200);
                 }
+                
+                showStatusMessage('初始化完成', 2000);
                 
                 setTimeout(() => {
                     loadDefaultPhotos();
