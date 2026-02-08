@@ -29,6 +29,8 @@
         .control-btn:hover { background: rgba(212, 175, 55, 0.2); border-color: rgba(212, 175, 55, 0.8); color: #fff; transform: scale(1.05); }
         .control-btn:active { transform: scale(0.95); }
         
+        .control-btn.hidden { display: none !important; }
+        
         #file-input, #music-input, #import-input { display: none; }
 
         #webcam-wrapper { position: absolute; bottom: 20px; right: 20px; opacity: 0; pointer-events: none; border: 1px solid rgba(212, 175, 55, 0.5); border-radius: 4px; background: #000; z-index: 50; display: flex; transition: opacity 0.5s; }
@@ -74,14 +76,14 @@
     <div id="ui-layer">
         <div id="top-right-controls">
             <div class="control-col" id="col-media">
-                <button id="btn-bg-music" class="control-btn">上传音乐</button>
-                <button id="btn-add-photo" class="control-btn">上传照片</button>
-                <button id="btn-write-letter" class="control-btn">上传书信</button>
+                <button id="btn-bg-music" class="control-btn hidden">上传音乐</button>
+                <button id="btn-add-photo" class="control-btn hidden">上传照片</button>
+                <button id="btn-write-letter" class="control-btn hidden">上传书信</button>
             </div>
             <div class="control-col" id="col-system">
-                <button id="btn-import" class="control-btn">导入网页</button>
-                <button id="btn-export" class="control-btn">导出网页</button>
-                <button id="btn-fullscreen" class="control-btn">全屏显示</button>
+                <button id="btn-import" class="control-btn hidden">导入网页</button>
+                <button id="btn-export" class="control-btn hidden">导出网页</button>
+                <button id="btn-fullscreen" class="control-btn hidden">全屏显示</button>
             </div>
         </div>
         <input type="file" id="file-input" multiple accept="image/*">
