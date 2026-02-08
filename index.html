@@ -341,6 +341,9 @@
                 const photoMesh = STATE.focusTarget.children[0];
                 if (photoMesh) {
                     photoMesh.renderOrder = (STATE.mode === 'FOCUS') ? 10 : 2;
+                    if (photoMesh.material) {
+                        photoMesh.material.depthTest = (STATE.mode !== 'FOCUS');
+                    }
                 }
             }
         }
