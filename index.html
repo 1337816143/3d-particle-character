@@ -507,7 +507,6 @@
                 opacity: 0.65,
                 blending: THREE.AdditiveBlending,
                 depthWrite: false,
-                depthTest: false,
                 vertexColors: true
             });
             matLib.frameHologram = new THREE.MeshBasicMaterial({ 
@@ -741,7 +740,7 @@
                 radius: 60,
                 height: 30,
                 arcAngle: Math.PI * 1.2,
-                depth: -18,
+                depth: 18,
                 photoSpacing: 0.02,
                 scrollSpeed: 0.2,
                 photoHeight: 10,
@@ -887,7 +886,7 @@
                 radius: 60,
                 height: 30,
                 arcAngle: Math.PI * 1.2,
-                depth: -18,
+                depth: 18,
                 photoSpacing: 0.02,
                 scrollSpeed: 0.2,
                 photoHeight: 10,
@@ -1412,8 +1411,29 @@
         function loadDefaultPhotos() {
             if (!STATE.photos || STATE.photos.length === 0) return;
             console.log('Loading default photos:', STATE.photos.length);
-            console.log('Creating hologram photo cylinder');
-            createHologramPhotoCylinder();
+            let loadedCount = 0;
+            
+            STATE.photos.forEach((photoPath, index) => {
+                const loader = new THREE.TextureLoader();
+                loader.load(photoPath, (texture) => {
+                    texture.colorSpace = THREE.SRGBColorSpace;
+                    addPhotoToScene(texture);
+                    loadedCount++;
+                    console.log(`Loaded photo ${loadedCount}/${STATE.photos.length}: ${photoPath}`);
+                    
+                    if (loadedCount === STATE.photos.length) {
+                        console.log('All photos loaded, creating hologram photo cylinder');
+                        createHologramPhotoCylinder();
+                    }
+                }, undefined, (error) => {
+                    console.warn(`Failed to load photo: ${photoPath}`, error);
+                    loadedCount++;
+                    if (loadedCount === STATE.photos.length) {
+                        console.log('All photos loaded (with errors), creating hologram photo cylinder');
+                        createHologramPhotoCylinder();
+                    }
+                });
+            });
         }
 
         function loadDefaultMusic() {
