@@ -1005,7 +1005,7 @@
                     return sum + (photo.width / wallConfig.radius);
                 }, 0);
                 
-                const spacingCount = rowPhotos.length - 1;
+                const spacingCount = rowPhotos.length;
                 const spacingAngle = (wallConfig.arcAngle - totalPhotoArc) / spacingCount;
                 
                 let currentAngle = -wallConfig.arcAngle / 2;
@@ -1059,11 +1059,7 @@
                             hologramPhotoCylinderGroup.add(group);
                             STATE.hologramPhotoWall.photos.push(group);
                             
-                            if (col < rowPhotos.length - 1) {
-                                currentAngle += arcPerPhotoActual + spacingAngle;
-                            } else {
-                                currentAngle += arcPerPhotoActual;
-                            }
+                            currentAngle += arcPerPhotoActual + spacingAngle;
                             
                             resolve();
                         });
