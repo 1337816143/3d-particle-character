@@ -169,7 +169,7 @@
         };
 
         const STATE = {
-            mode: 'TREE', focusTarget: null, currentPhotoIndex: -1,
+            mode: 'TREE', focusTarget: null, previousFocusTarget: null, currentPhotoIndex: -1,
             currentThemeIndex: 2,
             currentMusicIndex: 0,
             gestureDebounceTimer: 0,
@@ -1745,8 +1745,21 @@
                         STATE.focusTarget.position.lerp(targetPos, 6.0 * dt);
                         STATE.focusTarget.scale.lerp(new THREE.Vector3(2.0, 2.0, 2.0), 6.0 * dt);
                         STATE.focusTarget.lookAt(0, 0, 20);
+                        
+                        const photoMesh = STATE.focusTarget.children[0];
+                        if (photoMesh && photoMesh.material) {
+                            photoMesh.material.color.setScalar(0.85);
+                        }
                     } else {
                         wall.isScrolling = true;
+                        
+                        if (STATE.previousFocusTarget && STATE.previousFocusTarget !== STATE.focusTarget) {
+                            const prevPhotoMesh = STATE.previousFocusTarget.children[0];
+                            if (prevPhotoMesh && prevPhotoMesh.material) {
+                                prevPhotoMesh.material.color.setScalar(1.0);
+                            }
+                        }
+                        STATE.previousFocusTarget = STATE.focusTarget;
                         
                         wall.scrollOffset += wall.wallConfig.scrollSpeed * dt;
                         
