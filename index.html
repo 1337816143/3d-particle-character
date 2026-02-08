@@ -1071,6 +1071,8 @@
             
             console.log('全息环绕曲面照片墙创建完成，照片数量:', photoCount);
             console.log('========== 全息环绕曲面照片墙创建完成 ==========');
+            
+            loadDefaultMusic();
         }
         
         async function createPhotosWithDefaultGrouping(shuffledPhotos, photos, photoCount) {
@@ -1748,7 +1750,7 @@
                         
                         const photoMesh = STATE.focusTarget.children[0];
                         if (photoMesh && photoMesh.material) {
-                            photoMesh.material.color.setScalar(0.7);
+                            photoMesh.material.color.setScalar(0.57);
                         }
                     } else {
                         wall.isScrolling = true;
@@ -1938,8 +1940,6 @@
                 setupLetterSystem(); 
                 
                 initMediaPipe().catch(console.warn);
-                
-                loadDefaultMusic();
                 
                 const loader = document.getElementById('loader');
                 if (loader) {
