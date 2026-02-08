@@ -1001,6 +1001,8 @@
                 const rowPhotos = configRows[row];
                 const y = startRowY + row * rowHeight;
                 
+                let currentAngle = -wallConfig.arcAngle / 2;
+                
                 for (let col = 0; col < rowPhotos.length; col++) {
                     const photoInfo = rowPhotos[col];
                     const loader = new THREE.TextureLoader();
@@ -1026,7 +1028,9 @@
                             photo.renderOrder = 2;
                             group.add(photo);
                             
-                            const angle = -wallConfig.arcAngle / 2 + col * arcPerPhoto + arcPerPhoto / 2 + rowOffsets[row];
+                            const arcPerPhotoActual = actualPhotoWidth / wallConfig.radius * 0.77;
+                            
+                            const angle = currentAngle + arcPerPhotoActual / 2 + rowOffsets[row];
                             const x = Math.sin(angle) * wallConfig.radius;
                             const z = -Math.cos(angle) * wallConfig.radius - wallConfig.depth;
                             
@@ -1047,6 +1051,9 @@
                             
                             hologramPhotoCylinderGroup.add(group);
                             STATE.hologramPhotoWall.photos.push(group);
+                            
+                            currentAngle += arcPerPhotoActual;
+                            
                             resolve();
                         });
                     });
