@@ -507,6 +507,7 @@
                 opacity: 0.65,
                 blending: THREE.AdditiveBlending,
                 depthWrite: false,
+                depthTest: false,
                 vertexColors: true
             });
             matLib.frameHologram = new THREE.MeshBasicMaterial({ 
@@ -740,7 +741,7 @@
                 radius: 60,
                 height: 30,
                 arcAngle: Math.PI * 1.2,
-                depth: 18,
+                depth: -18,
                 photoSpacing: 0.02,
                 scrollSpeed: 0.2,
                 photoHeight: 10,
@@ -886,7 +887,7 @@
                 radius: 60,
                 height: 30,
                 arcAngle: Math.PI * 1.2,
-                depth: 18,
+                depth: -18,
                 photoSpacing: 0.02,
                 scrollSpeed: 0.2,
                 photoHeight: 10,
