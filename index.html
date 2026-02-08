@@ -334,7 +334,14 @@
 
         function updateParticleDepthTest() {
             if (hologramSystem && hologramSystem.material) {
-                hologramSystem.material.depthTest = (STATE.mode === 'FOCUS');
+                hologramSystem.material.depthTest = false;
+            }
+            
+            if (STATE.focusTarget) {
+                const photoMesh = STATE.focusTarget.children[0];
+                if (photoMesh) {
+                    photoMesh.renderOrder = (STATE.mode === 'FOCUS') ? 10 : 2;
+                }
             }
         }
 
