@@ -1028,7 +1028,8 @@
                             photo.renderOrder = 2;
                             group.add(photo);
                             
-                            const arcPerPhotoActual = actualPhotoWidth / wallConfig.radius * 0.77;
+                            const arcPerPhotoActual = actualPhotoWidth / wallConfig.radius;
+                            const fixedSpacingAngle = 2.5 * (Math.PI / 180);
                             
                             const angle = currentAngle + arcPerPhotoActual / 2 + rowOffsets[row];
                             const x = Math.sin(angle) * wallConfig.radius;
@@ -1052,7 +1053,7 @@
                             hologramPhotoCylinderGroup.add(group);
                             STATE.hologramPhotoWall.photos.push(group);
                             
-                            currentAngle += arcPerPhotoActual;
+                            currentAngle += arcPerPhotoActual + fixedSpacingAngle;
                             
                             resolve();
                         });
