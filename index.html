@@ -335,6 +335,7 @@
         function updateParticleDepthTest() {
             if (hologramSystem && hologramSystem.material) {
                 hologramSystem.material.depthTest = false;
+                hologramSystem.material.blending = (STATE.mode === 'FOCUS') ? THREE.NormalBlending : THREE.AdditiveBlending;
             }
             
             if (STATE.focusTarget) {
