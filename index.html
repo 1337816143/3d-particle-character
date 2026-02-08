@@ -1038,8 +1038,8 @@
                             const arcPerPhotoActual = actualPhotoWidth / wallConfig.radius;
                             
                             const angle = currentAngle + arcPerPhotoActual / 2 + rowOffsets[row];
-                            const x = Math.sin(angle) * wallConfig.radius;
-                            const z = -Math.cos(angle) * wallConfig.radius - wallConfig.depth;
+                            const x = Math.cos(angle) * wallConfig.radius;
+                            const z = Math.sin(angle) * wallConfig.radius - wallConfig.depth;
                             
                             group.position.set(x, y, z);
                             group.lookAt(0, y, 0);
