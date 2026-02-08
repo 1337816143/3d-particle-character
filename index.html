@@ -332,6 +332,12 @@
             }, duration);
         }
 
+        function updateParticleDepthTest() {
+            if (hologramSystem && hologramSystem.material) {
+                hologramSystem.material.depthTest = (STATE.mode === 'FOCUS');
+            }
+        }
+
         async function loadGLBModelFromBase64() {
             try {
                 console.log('========== 开始加载GLB模型 ==========');
@@ -1167,6 +1173,7 @@
         function enterLetterMode() {
             if (STATE.mode === 'LETTER') return;
             STATE.mode = 'LETTER';
+            updateParticleDepthTest();
             const overlay = document.getElementById('letter-overlay'), paper = document.querySelector('.letter-paper'), display = document.getElementById('letter-content-display');
             overlay.style.display = 'flex'; requestAnimationFrame(() => { overlay.style.opacity = 1; paper.style.transform = 'translateY(0)'; });
             display.textContent = ''; display.classList.remove('cursor');
@@ -1182,6 +1189,7 @@
 
         function exitLetterMode() {
             STATE.mode = 'TREE'; clearTimeout(STATE.letterTyper); clearTimeout(STATE.letterStartTimer);
+            updateParticleDepthTest();
             const overlay = document.getElementById('letter-overlay'), paper = document.querySelector('.letter-paper');
             overlay.style.opacity = 0; paper.style.transform = 'translateY(20px)';
             setTimeout(() => { overlay.style.display = 'none'; }, 500);
@@ -1244,7 +1252,10 @@
             const avgSpread = (dIndex+dMiddle+dRing+dPinky)/4, isPalmOpen = avgSpread > CONFIG.gestures.palmOpenThreshold;
 
             if (isPointing) { 
-                STATE.mode = 'FOCUS';
+                if (STATE.mode !== 'FOCUS') {
+                    STATE.mode = 'FOCUS';
+                    updateParticleDepthTest();
+                }
                 if (!STATE.wasPointing) {
                     if (hologramPhotoCylinderGroup && STATE.hologramPhotoWall && STATE.hologramPhotoWall.photos.length > 0) {
                         const photos = STATE.hologramPhotoWall.photos;
@@ -1279,13 +1290,20 @@
                     if (STATE.mode !== 'SCATTER' || !STATE.hasPalmCenter) {
                         STATE.palmCenter = {x: lm[9].x, y: lm[9].y}; STATE.hasPalmCenter = true; STATE.gestureBaseSpread = avgSpread; STATE.scatterScale = 1.0;
                     }
-                    STATE.mode = 'SCATTER';
+                    if (STATE.mode !== 'SCATTER') {
+                        STATE.mode = 'SCATTER';
+                        updateParticleDepthTest();
+                    }
                     if (STATE.gestureBaseSpread) STATE.scatterScale += (THREE.MathUtils.clamp(Math.pow(STATE.gestureBaseSpread/avgSpread, 2), 0.1, 5.0) - STATE.scatterScale) * 0.15;
                     const gain = CONFIG.gestures.sensitivity, dx = lm[9].x - STATE.palmCenter.x, dy = lm[9].y - STATE.palmCenter.y;
                     STATE.spinVel.x += (THREE.MathUtils.clamp(-dy*gain, -3, 3) - STATE.spinVel.x) * 0.2;
                     STATE.spinVel.y += (THREE.MathUtils.clamp(dx*gain, -3, 3) - STATE.spinVel.y) * 0.2;
                 } else {
-                    STATE.mode = 'TREE'; STATE.hasPalmCenter = false; STATE.scatterScale = 1.0; STATE.spinVel.x *= 0.9; STATE.spinVel.y *= 0.9;
+                    if (STATE.mode !== 'TREE') {
+                        STATE.mode = 'TREE';
+                        updateParticleDepthTest();
+                    }
+                    STATE.hasPalmCenter = false; STATE.scatterScale = 1.0; STATE.spinVel.x *= 0.9; STATE.spinVel.y *= 0.9;
                 }
             }
             
