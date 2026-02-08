@@ -25,7 +25,7 @@
         #top-right-controls { position: absolute; top: 20px; right: 20px; z-index: 30; display: flex; flex-direction: row; gap: 15px; pointer-events: auto; }
         .control-col { display: flex; flex-direction: column; gap: 15px; }
         
-        .control-btn { background: rgba(10, 10, 10, 0.6); border: 1px solid rgba(212, 175, 55, 0.4); color: #d4af37; width: 100px; padding: 5px 0; border-radius: 7px; font-family: 'Cinzel', serif; font-size: 14px; font-weight: 600; cursor: pointer; backdrop-filter: blur(5px); transition: all 0.3s ease; }
+        .control-btn { background: rgba(10, 10, 10, 0.6); border: 1px solid rgba(212, 175, 55, 0.4); color: #d4af37; width: 100px; padding: 5px 0; border-radius: 7px; font-family: 'Cinzel', serif; font-size: 14px; font-weight: 600; cursor: pointer; backdrop-filter: blur(5px); transition: all 0.3s ease; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
         .control-btn:hover { background: rgba(212, 175, 55, 0.2); border-color: rgba(212, 175, 55, 0.8); color: #fff; transform: scale(1.05); }
         .control-btn:active { transform: scale(0.95); }
         
@@ -87,7 +87,10 @@
     <div id="ui-layer">
         <div id="top-right-controls">
             <div class="control-col" id="col-media">
-                <button id="btn-switch-video" class="control-btn">切换视频源(摄像头)</button>
+                <button id="btn-switch-video" class="control-btn">
+                    <span>切换视频源</span>
+                    <span id="video-source-text">（摄像头）</span>
+                </button>
                 <button id="btn-bg-music" class="control-btn hidden">上传音乐</button>
                 <button id="btn-add-photo" class="control-btn hidden">上传照片</button>
                 <button id="btn-write-letter" class="control-btn hidden">上传书信</button>
@@ -1632,8 +1635,10 @@
             STATE.videoSourceType = sourceType;
             
             const btnSwitchVideo = document.getElementById('btn-switch-video');
+            const videoSourceText = document.getElementById('video-source-text');
+            
             if (sourceType === 'camera') {
-                btnSwitchVideo.textContent = '切换视频源(窗口)';
+                videoSourceText.textContent = '（摄像头）';
                 document.getElementById('screen-wrapper').style.opacity = 0;
                 if (navigator.mediaDevices?.getUserMedia) {
                     try {
@@ -1645,7 +1650,7 @@
                     }
                 }
             } else if (sourceType === 'screen') {
-                btnSwitchVideo.textContent = '切换视频源(同时)';
+                videoSourceText.textContent = '（窗口）';
                 document.getElementById('webcam-wrapper').style.opacity = 0;
                 if (navigator.mediaDevices?.getDisplayMedia) {
                     try {
@@ -1657,7 +1662,7 @@
                     }
                 }
             } else if (sourceType === 'both') {
-                btnSwitchVideo.textContent = '切换视频源(摄像头)';
+                videoSourceText.textContent = '（同时）';
                 if (navigator.mediaDevices?.getUserMedia) {
                     try {
                         const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: {ideal: 640}, height: {ideal: 480} } });
