@@ -322,9 +322,13 @@
         const _targetVec = new THREE.Vector3();
         const _invMatrix = new THREE.Matrix4();
 
-        function showStatusMessage(message, isBreathing = false, duration = 1500) {
+        function showStatusMessage(message, isBreathing = false, duration = 1500, replaceLast = false) {
             const container = document.getElementById('status-messages');
             if (!container) return;
+
+            if (replaceLast && container.lastElementChild) {
+                container.removeChild(container.lastElementChild);
+            }
 
             const messageEl = document.createElement('div');
             messageEl.className = 'status-message';
@@ -1087,7 +1091,7 @@
                             texture.colorSpace = THREE.SRGBColorSpace;
                             
                             loadedPhotoCount++;
-                            showStatusMessage(`正在加载照片 ${loadedPhotoCount}/${photoCount}...`, true);
+                            showStatusMessage(`正在加载照片 ${loadedPhotoCount}/${photoCount}...`, true, 1500, true);
                             
                             const actualPhotoHeight = photoHeight;
                             const actualPhotoWidth = photoInfo.width;
@@ -1232,7 +1236,7 @@
                             texture.colorSpace = THREE.SRGBColorSpace;
                             
                             loadedPhotoCount++;
-                            showStatusMessage(`正在加载照片 ${loadedPhotoCount}/${photoCount}...`, true);
+                            showStatusMessage(`正在加载照片 ${loadedPhotoCount}/${photoCount}...`, true, 1500, true);
                             
                             const aspect = texture.image.width / texture.image.height;
                             const actualPhotoHeight = photoHeight;
@@ -1948,7 +1952,7 @@
                     addPhotoToScene(texture);
                     loadedCount++;
                     console.log(`Loaded photo ${loadedCount}/${STATE.photos.length}: ${photoPath}`);
-                    showStatusMessage(`正在加载照片 ${loadedCount}/${STATE.photos.length}...`, true);
+                    showStatusMessage(`正在加载照片 ${loadedCount}/${STATE.photos.length}...`, true, 1500, true);
                     
                     if (loadedCount === STATE.photos.length) {
                         console.log('All photos loaded, creating hologram photo cylinder');
@@ -1957,7 +1961,7 @@
                 }, undefined, (error) => {
                     console.warn(`Failed to load photo: ${photoPath}`, error);
                     loadedCount++;
-                    showStatusMessage(`正在加载照片 ${loadedCount}/${STATE.photos.length}...`, true);
+                    showStatusMessage(`正在加载照片 ${loadedCount}/${STATE.photos.length}...`, true, 1500, true);
                     if (loadedCount === STATE.photos.length) {
                         console.log('All photos loaded (with errors), creating hologram photo cylinder');
                         createHologramPhotoCylinder();
