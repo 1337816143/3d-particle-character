@@ -87,7 +87,7 @@
     <div id="ui-layer">
         <div id="top-right-controls">
             <div class="control-col" id="col-media">
-                <button id="btn-switch-video" class="control-btn">切换视频源</button>
+                <button id="btn-switch-video" class="control-btn">切换视频源(摄像头)</button>
                 <button id="btn-bg-music" class="control-btn hidden">上传音乐</button>
                 <button id="btn-add-photo" class="control-btn hidden">上传照片</button>
                 <button id="btn-write-letter" class="control-btn hidden">上传书信</button>
@@ -322,8 +322,8 @@
         let hologramBackgroundSystem = null;
         let bloomPass = null;
 
-        let handLandmarker, video, drawingUtils, canvasCtx;
-        let screenVideo, screenCanvasCtx;
+        let handLandmarkerCamera, handLandmarkerScreen, video, drawingUtilsCamera, canvasCtx;
+        let screenVideo, screenCanvasCtx, drawingUtilsScreen;
         let caneTexture, snowTexture, matLib = {};
         
         const _tempVec = new THREE.Vector3();
@@ -1561,6 +1561,8 @@
                 e.stopPropagation(); 
                 if (STATE.videoSourceType === 'camera') {
                     startVideoSource('screen');
+                } else if (STATE.videoSourceType === 'screen') {
+                    startVideoSource('both');
                 } else {
                     startVideoSource('camera');
                 }
@@ -1594,9 +1596,12 @@
         async function initMediaPipe() {
             showStatusMessage('正在初始化手势识别...', true);
             const vision = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm");
-            handLandmarker = await HandLandmarker.createFromOptions(vision, { baseOptions: { modelAssetPath: `https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task`, delegate: "GPU" }, runningMode: "VIDEO", numHands: 1 });
-            video = document.getElementById('webcam'); canvasCtx = document.getElementById('webcam-preview').getContext('2d'); drawingUtils = new DrawingUtils(canvasCtx);
-            screenVideo = document.getElementById('screen'); screenCanvasCtx = document.getElementById('screen-preview').getContext('2d');
+            
+            handLandmarkerCamera = await HandLandmarker.createFromOptions(vision, { baseOptions: { modelAssetPath: `https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task`, delegate: "GPU" }, runningMode: "VIDEO", numHands: 1 });
+            handLandmarkerScreen = await HandLandmarker.createFromOptions(vision, { baseOptions: { modelAssetPath: `https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task`, delegate: "GPU" }, runningMode: "VIDEO", numHands: 1 });
+            
+            video = document.getElementById('webcam'); canvasCtx = document.getElementById('webcam-preview').getContext('2d'); drawingUtilsCamera = new DrawingUtils(canvasCtx);
+            screenVideo = document.getElementById('screen'); screenCanvasCtx = document.getElementById('screen-preview').getContext('2d'); drawingUtilsScreen = new DrawingUtils(screenCanvasCtx);
             
             video.addEventListener("loadeddata", () => { 
                 video.play(); 
@@ -1605,9 +1610,7 @@
                 document.getElementById('webcam-wrapper').style.height = (120/aspect) + 'px';
                 document.getElementById('webcam-preview').width = video.videoWidth;
                 document.getElementById('webcam-preview').height = video.videoHeight;
-                if (STATE.videoSourceType === 'camera') {
-                    showStatusMessageComplete('手势识别初始化完成');
-                }
+                showStatusMessageComplete('摄像头手势识别已启动');
                 predictWebcam(); 
             });
             
@@ -1618,9 +1621,7 @@
                 document.getElementById('screen-wrapper').style.height = (120/aspect) + 'px';
                 document.getElementById('screen-preview').width = screenVideo.videoWidth;
                 document.getElementById('screen-preview').height = screenVideo.videoHeight;
-                if (STATE.videoSourceType === 'screen') {
-                    showStatusMessageComplete('窗口捕获已启动');
-                }
+                showStatusMessageComplete('窗口手势识别已启动');
                 predictWebcam(); 
             });
             
@@ -1630,25 +1631,21 @@
         async function startVideoSource(sourceType) {
             STATE.videoSourceType = sourceType;
             
-            if (video.srcObject) {
-                const tracks = video.srcObject.getTracks();
-                tracks.forEach(track => track.stop());
-                video.srcObject = null;
-            }
-            
-            if (screenVideo.srcObject) {
-                const tracks = screenVideo.srcObject.getTracks();
-                tracks.forEach(track => track.stop());
-                screenVideo.srcObject = null;
-            }
-            
+            const btnSwitchVideo = document.getElementById('btn-switch-video');
             if (sourceType === 'camera') {
+                btnSwitchVideo.textContent = '切换视频源(窗口)';
                 document.getElementById('screen-wrapper').style.opacity = 0;
                 if (navigator.mediaDevices?.getUserMedia) {
-                    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: {ideal: 640}, height: {ideal: 480} } });
-                    video.srcObject = stream;
+                    try {
+                        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: {ideal: 640}, height: {ideal: 480} } });
+                        video.srcObject = stream;
+                    } catch (error) {
+                        console.error('摄像头启动失败:', error);
+                        showStatusMessage('摄像头启动失败', false, 2000);
+                    }
                 }
             } else if (sourceType === 'screen') {
+                btnSwitchVideo.textContent = '切换视频源(同时)';
                 document.getElementById('webcam-wrapper').style.opacity = 0;
                 if (navigator.mediaDevices?.getDisplayMedia) {
                     try {
@@ -1657,43 +1654,80 @@
                     } catch (error) {
                         console.error('窗口捕获失败:', error);
                         showStatusMessage('窗口捕获已取消', false, 2000);
-                        await startVideoSource('camera');
+                    }
+                }
+            } else if (sourceType === 'both') {
+                btnSwitchVideo.textContent = '切换视频源(摄像头)';
+                if (navigator.mediaDevices?.getUserMedia) {
+                    try {
+                        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: {ideal: 640}, height: {ideal: 480} } });
+                        video.srcObject = stream;
+                    } catch (error) {
+                        console.error('摄像头启动失败:', error);
+                        showStatusMessage('摄像头启动失败', false, 2000);
+                    }
+                }
+                if (navigator.mediaDevices?.getDisplayMedia) {
+                    try {
+                        const stream = await navigator.mediaDevices.getDisplayMedia({ video: { cursor: "always" }, audio: false });
+                        screenVideo.srcObject = stream;
+                    } catch (error) {
+                        console.error('窗口捕获失败:', error);
+                        showStatusMessage('窗口捕获已取消', false, 2000);
                     }
                 }
             }
         }
 
-        let lastVideoTime = -1;
+        let lastCameraTime = -1;
+        let lastScreenTime = -1;
         async function predictWebcam() {
-            const currentVideo = STATE.videoSourceType === 'camera' ? video : screenVideo;
-            const currentCanvasCtx = STATE.videoSourceType === 'camera' ? canvasCtx : screenCanvasCtx;
+            let handDetected = false;
             
-            if (!currentVideo || !currentCanvasCtx) {
-                requestAnimationFrame(predictWebcam);
-                return;
-            }
-            
-            if (currentVideo.videoWidth <= 0 || currentVideo.videoHeight <= 0) {
-                requestAnimationFrame(predictWebcam);
-                return;
-            }
-            
-            if (lastVideoTime !== currentVideo.currentTime && handLandmarker) {
-                lastVideoTime = currentVideo.currentTime;
-                
-                try {
-                    const result = handLandmarker.detectForVideo(currentVideo, performance.now());
-                    currentCanvasCtx.clearRect(0, 0, currentCanvasCtx.canvas.width, currentCanvasCtx.canvas.height);
-                    currentCanvasCtx.drawImage(currentVideo, 0, 0, currentCanvasCtx.canvas.width, currentCanvasCtx.canvas.height);
-                    if (result.landmarks?.[0]) {
-                        drawingUtils.drawConnectors(result.landmarks[0], HandLandmarker.HAND_CONNECTIONS, { color: "#d4af37", lineWidth: 3 });
-                        drawingUtils.drawLandmarks(result.landmarks[0], { color: "#ffffff", lineWidth: 1, radius: 3 });
-                        processGestures(result.landmarks[0]);
-                    } else STATE.hand.detected = false;
-                } catch (error) {
-                    console.error('手势识别错误:', error);
+            if (video && video.videoWidth > 0 && video.videoHeight > 0 && handLandmarkerCamera) {
+                if (lastCameraTime !== video.currentTime) {
+                    lastCameraTime = video.currentTime;
+                    
+                    try {
+                        const result = handLandmarkerCamera.detectForVideo(video, performance.now());
+                        canvasCtx.clearRect(0, 0, canvasCtx.canvas.width, canvasCtx.canvas.height);
+                        canvasCtx.drawImage(video, 0, 0, canvasCtx.canvas.width, canvasCtx.canvas.height);
+                        if (result.landmarks?.[0]) {
+                            drawingUtilsCamera.drawConnectors(result.landmarks[0], HandLandmarker.HAND_CONNECTIONS, { color: "#d4af37", lineWidth: 3 });
+                            drawingUtilsCamera.drawLandmarks(result.landmarks[0], { color: "#ffffff", lineWidth: 1, radius: 3 });
+                            processGestures(result.landmarks[0]);
+                            handDetected = true;
+                        }
+                    } catch (error) {
+                        console.error('摄像头手势识别错误:', error);
+                    }
                 }
             }
+            
+            if (screenVideo && screenVideo.videoWidth > 0 && screenVideo.videoHeight > 0 && handLandmarkerScreen) {
+                if (lastScreenTime !== screenVideo.currentTime) {
+                    lastScreenTime = screenVideo.currentTime;
+                    
+                    try {
+                        const result = handLandmarkerScreen.detectForVideo(screenVideo, performance.now());
+                        screenCanvasCtx.clearRect(0, 0, screenCanvasCtx.canvas.width, screenCanvasCtx.canvas.height);
+                        screenCanvasCtx.drawImage(screenVideo, 0, 0, screenCanvasCtx.canvas.width, screenCanvasCtx.canvas.height);
+                        if (result.landmarks?.[0]) {
+                            drawingUtilsScreen.drawConnectors(result.landmarks[0], HandLandmarker.HAND_CONNECTIONS, { color: "#00ff00", lineWidth: 3 });
+                            drawingUtilsScreen.drawLandmarks(result.landmarks[0], { color: "#ffffff", lineWidth: 1, radius: 3 });
+                            processGestures(result.landmarks[0]);
+                            handDetected = true;
+                        }
+                    } catch (error) {
+                        console.error('窗口手势识别错误:', error);
+                    }
+                }
+            }
+            
+            if (!handDetected) {
+                STATE.hand.detected = false;
+            }
+            
             requestAnimationFrame(predictWebcam);
         }
 
