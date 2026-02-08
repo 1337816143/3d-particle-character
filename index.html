@@ -22,11 +22,6 @@
         @keyframes spin { 100% { transform: rotate(360deg); } }
         #loader-text { color: #d4af37; font-size: 14px; font-family: 'Cinzel', serif; }
 
-        #status-messages { position: absolute; top: 20px; left: 20px; z-index: 50; display: flex; flex-direction: column; gap: 10px; pointer-events: none; }
-        .status-message { color: #d4af37; font-size: 14px; font-family: 'Cinzel', serif; text-shadow: 0 0 10px rgba(212, 175, 55, 0.5); opacity: 0; transform: translateX(-20px); transition: opacity 0.5s ease, transform 0.5s ease; }
-        .status-message.show { opacity: 1; transform: translateX(0); }
-        .status-message.fade-out { opacity: 0; transform: translateX(-20px); }
-
         #top-right-controls { position: absolute; top: 20px; right: 20px; z-index: 30; display: flex; flex-direction: row; gap: 15px; pointer-events: auto; }
         .control-col { display: flex; flex-direction: column; gap: 15px; }
         
@@ -76,13 +71,13 @@
         <div class="spinner"></div>
         <div id="loader-text">加载模型中...</div>
     </div>
-    <div id="status-messages"></div>
     <div id="canvas-container"></div>
 
     <div id="ui-layer">
         <div id="top-right-controls">
             <div class="control-col" id="col-media">
                 <button id="btn-bg-music" class="control-btn hidden">上传音乐</button>
+                <button id="btn-add-photo" class="control-btn hidden">上传照片</button>
                 <button id="btn-write-letter" class="control-btn hidden">上传书信</button>
             </div>
             <div class="control-col" id="col-system">
@@ -91,6 +86,7 @@
                 <button id="btn-fullscreen" class="control-btn hidden">全屏显示</button>
             </div>
         </div>
+        <input type="file" id="file-input" multiple accept="image/*">
         <input type="file" id="music-input" accept="audio/mp3,audio/*">
         <input type="file" id="import-input" accept=".json">
     </div>
@@ -131,13 +127,17 @@
 
         const CONFIG = {
             colors: {
-                bg: 0x020205,
-                white: 0xffffff,
+                bg: 0x020205, gold: 0xffd700, red: 0x880000, green: 0x004400,
+                iceBlue: 0xaaddff, white: 0xffffff,
                 hologram: {
                     primary: 0x00ffff,
                     secondary: 0x9900ff,
                     transition: 0x6600ff
                 }
+            },
+            particles: { 
+                count: 10000, dustCount: 4500, treeHeight: 28, treeRadius: 9,
+                snowCount: 2000, snowSpeed: 8
             },
             hologram: {
                 count: 50000,
@@ -172,13 +172,14 @@
 
         const STATE = {
             mode: 'TREE', focusTarget: null, previousFocusTarget: null, currentPhotoIndex: -1,
+            currentThemeIndex: 2,
             currentMusicIndex: 0,
             gestureDebounceTimer: 0,
             scatterScale: 1.0, gestureBaseSpread: null,
             hand: { detected: false, x: 0, y: 0 },
             rotation: { x: 0, y: 0 }, spinVel: { x: 0, y: 0 }, time: 0,
             wasPointing: false, palmCenter: { x: 0.5, y: 0.5 }, hasPalmCenter: false,
-            letterContent: "敢对我竖中指？！嗯？？（靠近）\n（盯...）\n在这个特别的时刻，\n我想告诉你，\n你是我眼中的万千星河...！！！", 
+            letterContent: "在这个特别的时刻，\n我想告诉你，\n你是我眼中的万千星河。\n\n(请点击右上角上传书信修改此内容)", 
             letterTyper: null, letterStartTimer: null, letterLastTriggerTime: 0,
             musicData: [
                 'music/Ether.mp3',
@@ -294,65 +295,25 @@
         };
 
         let scene, camera, renderer, composer, clock = new THREE.Clock();
-        let mainGroup, starGroup, bgGroup, photoMeshGroup;
+        let mainGroup, starGroup, bgGroup, photoMeshGroup, particleSystem = [];
         let hologramParticleSystem = []; 
         let hologramPhotoCylinderGroup = null;
+        let galaxySystem = null; 
+        let snowSystem = null;
         let hologramSystem = null;
         let hologramBackgroundSystem = null;
         let bloomPass = null;
 
         let handLandmarker, video, drawingUtils, canvasCtx;
-        let snowTexture, matLib = {};
+        let caneTexture, snowTexture, matLib = {};
         
         const _tempVec = new THREE.Vector3();
         const _targetVec = new THREE.Vector3();
         const _invMatrix = new THREE.Matrix4();
 
-        function showStatusMessage(message, duration = 2500) {
-            const container = document.getElementById('status-messages');
-            if (!container) return;
-
-            const messageEl = document.createElement('div');
-            messageEl.className = 'status-message';
-            messageEl.textContent = message;
-            container.appendChild(messageEl);
-
-            requestAnimationFrame(() => {
-                messageEl.classList.add('show');
-            });
-
-            setTimeout(() => {
-                messageEl.classList.remove('show');
-                messageEl.classList.add('fade-out');
-                setTimeout(() => {
-                    if (container.contains(messageEl)) {
-                        container.removeChild(messageEl);
-                    }
-                }, 500);
-            }, duration);
-        }
-
-        function updateParticleDepthTest() {
-            if (hologramSystem && hologramSystem.material) {
-                hologramSystem.material.depthTest = false;
-                hologramSystem.material.blending = (STATE.mode === 'FOCUS') ? THREE.NormalBlending : THREE.AdditiveBlending;
-            }
-            
-            if (STATE.focusTarget) {
-                const photoMesh = STATE.focusTarget.children[0];
-                if (photoMesh) {
-                    photoMesh.renderOrder = (STATE.mode === 'FOCUS') ? 10 : 2;
-                    if (photoMesh.material) {
-                        photoMesh.material.depthTest = (STATE.mode !== 'FOCUS');
-                    }
-                }
-            }
-        }
-
         async function loadGLBModelFromBase64() {
             try {
                 console.log('========== 开始加载GLB模型 ==========');
-                showStatusMessage('正在加载模型...');
                 const loaderText = document.getElementById('loader-text');
                 if (loaderText) loaderText.textContent = '读取模型文件...';
                 
@@ -362,10 +323,10 @@
                     const loader = new GLTFLoader();
                     
                     let timeoutId = setTimeout(() => {
-                        console.warn('!!! 模型加载超时（60秒），将使用默认圣诞树形状 !!!');
+                        console.warn('!!! 模型加载超时（30秒），将使用默认圣诞树形状 !!!');
                         if (loaderText) loaderText.textContent = '使用默认形状...';
                         resolve([]);
-                    }, 60000);
+                    }, 30000);
                     
                     loader.load('model.glb', 
                         (gltf) => {
@@ -440,7 +401,6 @@
                             console.log('顶点变换完成');
                             console.log('!!! 模型顶点加载成功，粒子将使用人物模型形状 !!!');
                             console.log('========== 模型加载完成 ==========');
-                            showStatusMessage('模型加载完成');
                             resolve(vertices);
                         }, 
                         (xhr) => {
@@ -497,15 +457,23 @@
         }
 
         function setupLights() {
-            const ambientLight = new THREE.AmbientLight(CONFIG.hologram.ambientLight.color, CONFIG.hologram.ambientLight.intensity);
-            scene.add(ambientLight);
+            scene.add(new THREE.AmbientLight(0xffffff, 0.2));
+            const bottomLight = new THREE.PointLight(CONFIG.colors.gold, 3, 40);
+            bottomLight.position.set(0, -10, 10);
+            mainGroup.add(bottomLight);
+            
+            const spotGold = new THREE.SpotLight(0xfff0dd, 800);
+            spotGold.position.set(40, 60, 40); spotGold.angle = 0.4; spotGold.decay = 2;
+            scene.add(spotGold);
+            
+            const spotBlue = new THREE.SpotLight(0x4455ff, 400);
+            spotBlue.position.set(-40, 10, -30); spotBlue.lookAt(0,0,0);
+            scene.add(spotBlue);
         }
 
         function setupPostProcessing() {
             bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
-            bloomPass.threshold = CONFIG.hologram.bloom.threshold;
-            bloomPass.strength = CONFIG.hologram.bloom.strength;
-            bloomPass.radius = CONFIG.hologram.bloom.radius;
+            bloomPass.threshold = 0.75; bloomPass.strength = 0.5; bloomPass.radius = 0.5;
             composer = new EffectComposer(renderer);
             composer.addPass(new RenderPass(scene, camera));
             composer.addPass(bloomPass);
@@ -539,6 +507,17 @@
         }
 
         function createTextures() {
+            const canvas = document.createElement('canvas'); canvas.width = 128; canvas.height = 128;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#ffffff'; ctx.fillRect(0,0,128,128);
+            ctx.fillStyle = '#aa0000'; ctx.beginPath();
+            for(let i=-128; i<256; i+=32) { ctx.moveTo(i, 0); ctx.lineTo(i+32, 128); ctx.lineTo(i+16, 128); ctx.lineTo(i-16, 0); }
+            ctx.fill();
+            caneTexture = new THREE.CanvasTexture(canvas);
+            caneTexture.colorSpace = THREE.SRGBColorSpace;
+            caneTexture.wrapS = THREE.RepeatWrapping; caneTexture.wrapT = THREE.RepeatWrapping;
+            caneTexture.repeat.set(3, 3);
+
             const snowCvs = document.createElement('canvas'); snowCvs.width = 32; snowCvs.height = 32;
             const sCtx = snowCvs.getContext('2d');
             const grad = sCtx.createRadialGradient(16,16,0, 16,16,16);
@@ -549,6 +528,24 @@
         }
 
         function createMaterials() {
+            matLib.gold = new THREE.MeshStandardMaterial({ color: CONFIG.colors.gold, metalness: 1.0, roughness: 0.15, envMapIntensity: 2.5, emissive: 0x664400, emissiveIntensity: 0.2 });
+            matLib.green = new THREE.MeshStandardMaterial({ color: CONFIG.colors.green, metalness: 0.4, roughness: 0.3, emissive: 0x001100, emissiveIntensity: 0.1 });
+            matLib.red = new THREE.MeshPhysicalMaterial({ color: CONFIG.colors.red, metalness: 0.6, roughness: 0.2, clearcoat: 1.0, emissive: 0x330000, emissiveIntensity: 0.4 });
+            matLib.candy = new THREE.MeshStandardMaterial({ map: caneTexture, roughness: 0.3, metalness: 0.1, emissive: 0x222222 });
+            matLib.frameGold = new THREE.MeshStandardMaterial({ color: CONFIG.colors.gold, metalness: 1.0, roughness: 0.2 });
+
+            const frostTex = createFrostTexture();
+            matLib.ice = new THREE.MeshPhysicalMaterial({ 
+                color: CONFIG.colors.iceBlue, metalness: 0.1, roughness: 0.1, roughnessMap: frostTex, 
+                transmission: 0.9, thickness: 2.5, ior: 1.5, clearcoat: 1.0, clearcoatRoughnessMap: frostTex,
+                emissive: 0x001133, emissiveIntensity: 0.2 
+            });
+            matLib.snowBorder = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.8, side: THREE.BackSide });
+            matLib.snow = new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.0, roughness: 0.9, emissive: 0xaaaaaa, emissiveIntensity: 0.3 });
+            matLib.frameIce = matLib.ice;
+            matLib.dust = new THREE.MeshBasicMaterial({ color: 0xffffee, blending: THREE.AdditiveBlending });
+            matLib.snowFlake = new THREE.PointsMaterial({ color: 0xffffff, size: 0.6, map: snowTexture, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false });
+            
             matLib.hologram = new THREE.PointsMaterial({
                 color: CONFIG.colors.hologram.primary,
                 size: CONFIG.hologram.size,
@@ -556,7 +553,6 @@
                 opacity: 0.65,
                 blending: THREE.AdditiveBlending,
                 depthWrite: false,
-                depthTest: false,
                 vertexColors: true
             });
             matLib.frameHologram = new THREE.MeshBasicMaterial({ 
@@ -565,7 +561,65 @@
                 opacity: 0.5,
                 side: THREE.DoubleSide
             });
-            matLib.snowFlake = new THREE.PointsMaterial({ color: 0xffffff, size: 0.6, map: snowTexture, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false });
+        }
+
+        class Particle {
+            constructor(mesh, type, isDust = false) {
+                this.mesh = mesh; this.type = type; this.isDust = isDust;
+                this.posTree = new THREE.Vector3(); this.posScatter = new THREE.Vector3();
+                this.baseScale = mesh.scale.x; this.offset = Math.random() * 100; this.speed = 0.5 + Math.random();
+                if (mesh.material && mesh.material.emissive) { this.baseEmissive = mesh.material.emissive.clone(); this.hasEmissive = true; }
+                this.calculatePositions();
+            }
+
+            calculatePositions() {
+                if (STATE.modelVertices && STATE.modelVertices.length > 0) {
+                    const vertexIndex = Math.floor(Math.random() * STATE.modelVertices.length);
+                    const vertex = STATE.modelVertices[vertexIndex];
+                    this.posTree.copy(vertex);
+                } else {
+                    const h = CONFIG.particles.treeHeight; let t = Math.random();
+                    t = Math.pow(t, 0.8); const y = (t * h) - h/2, angle = Math.random() * Math.PI * 2, r = Math.max(0.5, CONFIG.particles.treeRadius * (1.0 - t)) * Math.sqrt(Math.random());
+                    this.posTree.set(Math.cos(angle) * r, y, Math.sin(angle) * r);
+                }
+                const rScatter = this.isDust ? (15 + Math.random()*25) : (10 + Math.random()*15);
+                const theta = Math.random() * Math.PI * 2, phi = Math.acos(2 * Math.random() - 1);
+                this.posScatter.set(rScatter * Math.sin(phi) * Math.cos(theta), rScatter * Math.sin(phi) * Math.sin(theta), rScatter * Math.cos(phi));
+            }
+
+            update(dt, time, mode, focusTargetMesh, invMatrix) {
+                let target, s = this.baseScale, lerpSpeed = 3.0;
+                
+                if (mode === 'SCATTER') {
+                    _targetVec.copy(this.posScatter).multiplyScalar(STATE.scatterScale);
+                    target = _targetVec;
+                }
+                else if (mode === 'LETTER') target = this.posScatter;
+                else if (mode === 'FOCUS') {
+                    if (this.mesh === focusTargetMesh && invMatrix) {
+                        _targetVec.set(0, 0, CONFIG.camera.z - 15).applyMatrix4(invMatrix);
+                        target = _targetVec;
+                        lerpSpeed = 6.0; this.mesh.lookAt(camera.position); s = this.baseScale * 5.0;
+                    } else { target = this.posScatter; s = 0.01; }
+                } else {
+                    target = this.posTree;
+                }
+
+                _tempVec.copy(target);
+                if(mode === 'TREE') { 
+                    _tempVec.y += Math.sin(time * this.speed + this.offset) * 0.15; 
+                    _tempVec.x += Math.cos(time * 0.5 * this.speed + this.offset) * 0.1; 
+                }
+                this.mesh.position.lerp(_tempVec, lerpSpeed * dt);
+                this.mesh.scale.setScalar(s);
+                this.mesh.rotation.x += dt * this.speed * 0.5;
+                this.mesh.rotation.y += dt * this.speed * 0.3;
+                
+                if (this.hasEmissive && !this.isDust && this.type !== 'PHOTO') {
+                    const flicker = 0.7 + Math.sin(time * 3 + this.offset) * 0.3;
+                    this.mesh.material.emissive.copy(this.baseEmissive).multiplyScalar(flicker);
+                }
+            }
         }
 
         class HologramParticle {
@@ -616,6 +670,83 @@
             }
         }
 
+        function createGalaxyBackground() {
+            const geometry = new THREE.BufferGeometry();
+            const pos = [], colors = [];
+            for(let i=0; i<3000; i++) {
+                const r = 50 + Math.random() * 100, theta = Math.random() * Math.PI * 2, phi = Math.acos(2 * Math.random() - 1);
+                pos.push(r * Math.sin(phi) * Math.cos(theta), r * Math.sin(phi) * Math.sin(theta), r * Math.cos(phi));
+                const color = new THREE.Color();
+                color.setHSL(0.1 + Math.random() * 0.1, 0.8, 0.6 + Math.random() * 0.4);
+                colors.push(color.r, color.g, color.b);
+            }
+            geometry.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+            geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+            const material = new THREE.PointsMaterial({ size: 0.8, vertexColors: true, blending: THREE.AdditiveBlending, transparent: true, opacity: 0.8, depthWrite: false });
+            galaxySystem = new THREE.Points(geometry, material);
+            bgGroup.add(galaxySystem);
+            
+            createMeteors();
+        }
+
+        function createMeteors() {
+            const meteorCount = 8;
+            const meteors = [];
+            
+            for (let i = 0; i < meteorCount; i++) {
+                const geometry = new THREE.BufferGeometry();
+                const positions = new Float32Array(6);
+                const colors = new Float32Array(6);
+                
+                for (let j = 0; j < 6; j++) {
+                    const color = new THREE.Color();
+                    color.setHSL(0.55 + Math.random() * 0.1, 0.8, 0.9);
+                    colors[j * 3] = color.r;
+                    colors[j * 3 + 1] = color.g;
+                    colors[j * 3 + 2] = color.b;
+                }
+                
+                geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+                geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+                
+                const material = new THREE.LineBasicMaterial({
+                    vertexColors: true,
+                    transparent: true,
+                    opacity: 1.0,
+                    blending: THREE.AdditiveBlending
+                });
+                
+                const meteor = new THREE.Line(geometry, material);
+                meteor.userData = {
+                    speed: 5 + Math.random() * 5,
+                    resetTime: Math.random() * 10,
+                    active: false,
+                    startPos: new THREE.Vector3(),
+                    endPos: new THREE.Vector3()
+                };
+                
+                meteors.push(meteor);
+                bgGroup.add(meteor);
+            }
+            
+            galaxySystem.userData.meteors = meteors;
+        }
+
+        function createSnowBackground() {
+            const geometry = new THREE.BufferGeometry();
+            const pos = [], velocities = [];
+            for(let i=0; i<CONFIG.particles.snowCount; i++) {
+                pos.push((Math.random() - 0.5) * 100, (Math.random() - 0.5) * 100, (Math.random() - 0.5) * 100);
+                velocities.push(0.5 + Math.random());
+            }
+            geometry.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+            geometry.setAttribute('velocity', new THREE.Float32BufferAttribute(velocities, 1));
+
+            snowSystem = new THREE.Points(geometry, matLib.snowFlake);
+            snowSystem.visible = false; 
+            bgGroup.add(snowSystem);
+        }
+
         function createHologramBackground() {
             const geometry = new THREE.BufferGeometry();
             const pos = [], colors = [];
@@ -651,7 +782,7 @@
             });
 
             hologramBackgroundSystem = new THREE.Points(geometry, material);
-            hologramBackgroundSystem.visible = true;
+            hologramBackgroundSystem.visible = false;
             bgGroup.add(hologramBackgroundSystem);
         }
 
@@ -677,13 +808,31 @@
             
             const loaderText = document.getElementById('loader-text');
             if (loaderText) loaderText.textContent = '创建粒子...';
-            showStatusMessage('正在创建粒子系统...');
+            
+            const sphereGeo = new THREE.SphereGeometry(0.3, 16, 16), boxGeo = new THREE.BoxGeometry(0.25, 0.25, 0.25);
+            const curve = new THREE.CatmullRomCurve3([new THREE.Vector3(0,-0.5,0), new THREE.Vector3(0,0.3,0), new THREE.Vector3(0.1,0.5,0), new THREE.Vector3(0.3,0.4,0)]);
+            const candyGeo = new THREE.TubeGeometry(curve, 8, 0.08, 6, false), dustGeo = new THREE.OctahedronGeometry(0.1, 0);
+
+            for (let i = 0; i < CONFIG.particles.count; i++) {
+                const rand = Math.random(); let mesh, type;
+                if (rand < 0.35) { mesh = new THREE.Mesh(boxGeo, matLib.green); type = 'BOX'; } 
+                else if (rand < 0.70) { mesh = new THREE.Mesh(boxGeo, matLib.gold); type = 'GOLD_BOX'; } 
+                else if (rand < 0.90) { mesh = new THREE.Mesh(sphereGeo, matLib.gold); type = 'GOLD_SPHERE'; } 
+                else if (rand < 0.96) { mesh = new THREE.Mesh(sphereGeo, matLib.red); type = 'RED'; } 
+                else { mesh = new THREE.Mesh(candyGeo, matLib.candy); type = 'CANE'; }
+                const s = 0.4 + Math.random() * 0.4; mesh.scale.set(s,s,s);
+                mesh.rotation.set(Math.random()*6, Math.random()*6, Math.random()*6);
+                mainGroup.add(mesh); particleSystem.push(new Particle(mesh, type, false));
+            }
+            for(let i=0; i<CONFIG.particles.dustCount; i++) {
+                const mesh = new THREE.Mesh(dustGeo, matLib.dust); mesh.scale.setScalar(0.5 + Math.random());
+                mainGroup.add(mesh); particleSystem.push(new Particle(mesh, 'DUST', true));
+            }
 
             await createHologramParticleSystem();
             
-            console.log('粒子系统创建完成');
+            console.log('粒子系统创建完成，总粒子数:', particleSystem.length);
             console.log('========== 粒子系统创建完成 ==========');
-            showStatusMessage('粒子系统创建完成');
         }
 
         async function createHologramParticleSystem() {
@@ -738,7 +887,7 @@
                 geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
                 hologramSystem = new THREE.Points(geometry, matLib.hologram);
-                hologramSystem.visible = true;
+                hologramSystem.visible = false;
                 mainGroup.add(hologramSystem);
                 
                 console.log('全息粒子系统创建完成，全息粒子数:', CONFIG.hologram.count);
@@ -754,7 +903,6 @@
 
         async function createHologramPhotoCylinder() {
             console.log('========== 开始创建全息环绕曲面照片墙 ==========');
-            showStatusMessage('正在加载照片...');
             
             if (hologramPhotoCylinderGroup) {
                 scene.remove(hologramPhotoCylinderGroup);
@@ -821,7 +969,7 @@
             curvedWall.position.set(0, 0, -wallConfig.depth);
             curvedWall.rotation.y = 0;
             curvedWall.renderOrder = 0;
-            curvedWall.visible = true;
+            curvedWall.visible = false;
             hologramPhotoCylinderGroup.add(curvedWall);
             
             const totalArcLength = wallConfig.radius * wallConfig.arcAngle;
@@ -921,11 +1069,10 @@
                 }
             }
             
-            hologramPhotoCylinderGroup.visible = true;
+            hologramPhotoCylinderGroup.visible = false;
             
             console.log('全息环绕曲面照片墙创建完成，照片数量:', photoCount);
             console.log('========== 全息环绕曲面照片墙创建完成 ==========');
-            showStatusMessage('照片加载完成');
             
             loadDefaultMusic();
         }
@@ -968,7 +1115,7 @@
             curvedWall.position.set(0, 0, -wallConfig.depth);
             curvedWall.rotation.y = 0;
             curvedWall.renderOrder = 0;
-            curvedWall.visible = true;
+            curvedWall.visible = false;
             hologramPhotoCylinderGroup.add(curvedWall);
             
             const totalArcLength = wallConfig.radius * wallConfig.arcAngle;
@@ -1062,7 +1209,6 @@
             
             console.log('全息环绕曲面照片墙创建完成，照片数量:', photoCount);
             console.log('========== 全息环绕曲面照片墙创建完成 ==========');
-            showStatusMessage('照片加载完成');
         }
 
         async function createHologramPhotoFrame(photoSrc, size, frameColor, frameOpacity, frameWidth = 0.12) {
@@ -1115,6 +1261,105 @@
             });
         }
 
+        function switchTheme(themeIndex) {
+            STATE.currentThemeIndex = themeIndex;
+            const isGold = (themeIndex === 0);
+            const isIce = (themeIndex === 1);
+            const isHologram = (themeIndex === 2);
+
+            if (isHologram) {
+                document.body.classList.add('hologram-theme');
+            } else {
+                document.body.classList.remove('hologram-theme');
+            }
+
+            renderer.toneMappingExposure = isIce ? 0.6 : 1.0;
+
+            if (galaxySystem) galaxySystem.visible = isGold;
+            if (snowSystem) snowSystem.visible = isIce;
+            if (hologramSystem) hologramSystem.visible = isHologram;
+            if (hologramBackgroundSystem) hologramBackgroundSystem.visible = isHologram;
+            if (hologramPhotoCylinderGroup) hologramPhotoCylinderGroup.visible = isHologram;
+
+            if (isHologram) {
+                particleSystem.forEach(p => {
+                    p.mesh.visible = false;
+                });
+                hologramSystem.visible = true;
+            } else {
+                particleSystem.forEach(p => {
+                    p.mesh.visible = true;
+                });
+                hologramSystem.visible = false;
+                
+                particleSystem.forEach(p => {
+                    if (p.isDust) return;
+                    
+                    if (p.type === 'PHOTO') {
+                        const group = p.mesh;
+                        if (group.children[0]) {
+                            if (isGold) group.children[0].material = matLib.frameGold;
+                            else if (isIce) group.children[0].material = matLib.ice;
+                        }
+                        if (group.children[1]) {
+                            group.children[1].material.transparent = false;
+                            group.children[1].material.opacity = 1.0;
+                            group.children[1].material.color.setHex(0xffffff);
+                        }
+                        if (group.children[2]) group.children[2].visible = !isGold;
+                        return;
+                    }
+
+                    let newMat;
+                    if (isGold) {
+                        if(p.type.includes('GOLD')) newMat = matLib.gold;
+                        else if(p.type === 'BOX') newMat = matLib.green;
+                        else if(p.type === 'RED') newMat = matLib.red;
+                        else if(p.type === 'CANE') newMat = matLib.candy;
+                    } else if (isIce) {
+                        if(p.type.includes('GOLD') || p.type === 'BOX') newMat = matLib.ice; 
+                        else if(p.type === 'RED') newMat = matLib.snow;  
+                        else if(p.type === 'CANE') newMat = matLib.ice; 
+                    }
+                    if (newMat) p.mesh.material = newMat;
+                });
+            }
+
+            if (isHologram) {
+                scene.background = new THREE.Color(CONFIG.colors.bg);
+                scene.traverse(obj => {
+                    if (obj.isLight && obj.type === 'AmbientLight') {
+                        obj.color.setHex(CONFIG.hologram.ambientLight.color);
+                        obj.intensity = CONFIG.hologram.ambientLight.intensity;
+                    } else if (obj.isLight) {
+                        obj.visible = false;
+                    }
+                });
+                if (bloomPass) {
+                    bloomPass.threshold = CONFIG.hologram.bloom.threshold;
+                    bloomPass.strength = CONFIG.hologram.bloom.strength;
+                    bloomPass.radius = CONFIG.hologram.bloom.radius;
+                }
+            } else {
+                scene.background = new THREE.Color(CONFIG.colors.bg);
+                scene.traverse(obj => {
+                    if (obj.isLight) {
+                        if (obj.type === 'AmbientLight') {
+                            obj.color.setHex(0xffffff);
+                            obj.intensity = 0.2;
+                        } else {
+                            obj.visible = true;
+                        }
+                    }
+                });
+                if (bloomPass) {
+                    bloomPass.threshold = 0.75;
+                    bloomPass.strength = 0.5;
+                    bloomPass.radius = 0.5;
+                }
+            }
+        }
+
         function addPhotoToScene(texture) {
             if (!texture.image) return;
             const aspect = texture.image.width / texture.image.height;
@@ -1122,20 +1367,59 @@
             
             const group = new THREE.Group();
             const frameGeo = new THREE.BoxGeometry(photoW + 0.15, photoH + 0.15, 0.1);
-            const frame = new THREE.Mesh(frameGeo, matLib.frameHologram);
+            const currentFrameMat = (STATE.currentThemeIndex === 0) ? matLib.frameGold : matLib.ice;
+            const frame = new THREE.Mesh(frameGeo, currentFrameMat);
             group.add(frame);
             
             const photo = new THREE.Mesh(new THREE.PlaneGeometry(photoW, photoH), new THREE.MeshBasicMaterial({ map: texture }));
             photo.position.z = 0.06; group.add(photo);
 
-            photoMeshGroup.add(group);
+            const borderGeo = new THREE.BoxGeometry(photoW + 0.25, photoH + 0.25, 0.08);
+            const border = new THREE.Mesh(borderGeo, matLib.snowBorder);
+            border.position.z = -0.02; border.visible = (STATE.currentThemeIndex !== 0);
+            group.add(border);
+
+            photoMeshGroup.add(group); particleSystem.push(new Particle(group, 'PHOTO', false));
+        }
+
+        function handleImageUpload(e) {
+            if(!e.target.files.length) return;
+            Array.from(e.target.files).forEach(f => {
+                const reader = new FileReader();
+                reader.onload = (ev) => new THREE.TextureLoader().load(ev.target.result, t => { t.colorSpace = THREE.SRGBColorSpace; addPhotoToScene(t); });
+                reader.readAsDataURL(f);
+            });
+        }
+
+        function clearPhotos() {
+            const photosToRemove = particleSystem.filter(p => p.type === 'PHOTO');
+            photosToRemove.forEach(p => {
+                photoMeshGroup.remove(p.mesh);
+                p.mesh.traverse(child => {
+                    if (child.isMesh) {
+                        if (child.geometry) child.geometry.dispose();
+                        if (child.material) {
+                           if(Array.isArray(child.material)) child.material.forEach(m=>m.dispose());
+                           else child.material.dispose();
+                        }
+                    }
+                });
+            });
+            particleSystem = particleSystem.filter(p => p.type !== 'PHOTO');
         }
 
         function exportSceneData() {
+            const photos = particleSystem.filter(p => p.type === 'PHOTO').map(p => {
+                try {
+                    return p.mesh.children[1].material.map.image.src; 
+                } catch(e) { return null; }
+            }).filter(src => src !== null);
+
             const exportData = {
                 music: STATE.musicData,
                 letter: STATE.letterContent,
-                photos: STATE.photos
+                photos: photos,
+                theme: STATE.currentThemeIndex
             };
 
             const blob = new Blob([JSON.stringify(exportData)], {type: "application/json"});
@@ -1158,13 +1442,18 @@
                     audioEl.currentTime = 0;
                     audioEl.play().catch(console.warn);
                 }
+                clearPhotos();
                 if (data.photos && Array.isArray(data.photos)) {
-                    STATE.photos = data.photos;
-                    if (hologramPhotoCylinderGroup) {
-                        hologramPhotoCylinderGroup.clear();
-                        STATE.hologramPhotoWall = null;
-                    }
-                    createHologramPhotoCylinder();
+                    const loader = new THREE.TextureLoader();
+                    data.photos.forEach(src => {
+                        loader.load(src, t => { 
+                            t.colorSpace = THREE.SRGBColorSpace; 
+                            addPhotoToScene(t); 
+                        });
+                    });
+                }
+                if (data.theme !== undefined) {
+                    switchTheme(data.theme);
                 }
                 document.documentElement.requestFullscreen();
             } catch (e) {
@@ -1184,7 +1473,6 @@
         function enterLetterMode() {
             if (STATE.mode === 'LETTER') return;
             STATE.mode = 'LETTER';
-            updateParticleDepthTest();
             const overlay = document.getElementById('letter-overlay'), paper = document.querySelector('.letter-paper'), display = document.getElementById('letter-content-display');
             overlay.style.display = 'flex'; requestAnimationFrame(() => { overlay.style.opacity = 1; paper.style.transform = 'translateY(0)'; });
             display.textContent = ''; display.classList.remove('cursor');
@@ -1200,7 +1488,6 @@
 
         function exitLetterMode() {
             STATE.mode = 'TREE'; clearTimeout(STATE.letterTyper); clearTimeout(STATE.letterStartTimer);
-            updateParticleDepthTest();
             const overlay = document.getElementById('letter-overlay'), paper = document.querySelector('.letter-paper');
             overlay.style.opacity = 0; paper.style.transform = 'translateY(20px)';
             setTimeout(() => { overlay.style.display = 'none'; }, 500);
@@ -1208,8 +1495,6 @@
         }
 
         async function initMediaPipe() {
-            console.log('========== 开始初始化手势识别 ==========');
-            showStatusMessage('正在初始化手势识别...');
             const vision = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm");
             handLandmarker = await HandLandmarker.createFromOptions(vision, { baseOptions: { modelAssetPath: `https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task`, delegate: "GPU" }, runningMode: "VIDEO", numHands: 1 });
             video = document.getElementById('webcam'); canvasCtx = document.getElementById('webcam-preview').getContext('2d'); drawingUtils = new DrawingUtils(canvasCtx);
@@ -1224,7 +1509,6 @@
                     document.getElementById('webcam-wrapper').style.height = (120/aspect) + 'px';
                     document.getElementById('webcam-preview').width = video.videoWidth;
                     document.getElementById('webcam-preview').height = video.videoHeight;
-                    showStatusMessage('手势识别初始化完成');
                     predictWebcam(); 
                 });
             }
@@ -1259,16 +1543,24 @@
                 return;
             }
 
+            const isVHigh = dIndex > palmSize * 1.3 && dMiddle > palmSize * 1.3; 
+            const isOthersLow = dRing < dIndex * 0.5 && dPinky < dMiddle * 0.5; 
+            const isSpread = dist(8, 12) > dist(5, 9) * 1.2; 
+
+            if (isVHigh && isOthersLow && isSpread) {
+                if (Date.now() - STATE.gestureDebounceTimer > 2000) { 
+                    switchTheme((STATE.currentThemeIndex + 1) % 3); 
+                    STATE.gestureDebounceTimer = Date.now(); 
+                }
+            }
+
             const isPointing = dIndex > 0.1 && dMiddle < dIndex*0.7 && dRing < dIndex*0.7;
             const avgSpread = (dIndex+dMiddle+dRing+dPinky)/4, isPalmOpen = avgSpread > CONFIG.gestures.palmOpenThreshold;
 
             if (isPointing) { 
-                if (STATE.mode !== 'FOCUS') {
-                    STATE.mode = 'FOCUS';
-                    updateParticleDepthTest();
-                }
+                STATE.mode = 'FOCUS';
                 if (!STATE.wasPointing) {
-                    if (hologramPhotoCylinderGroup && STATE.hologramPhotoWall && STATE.hologramPhotoWall.photos.length > 0) {
+                    if (STATE.currentThemeIndex === 2 && hologramPhotoCylinderGroup && STATE.hologramPhotoWall && STATE.hologramPhotoWall.photos.length > 0) {
                         const photos = STATE.hologramPhotoWall.photos;
                         let bestPhoto = null;
                         let bestDistance = Infinity;
@@ -1292,6 +1584,9 @@
                         });
                         
                         STATE.focusTarget = bestPhoto || photos[(++STATE.currentPhotoIndex) % photos.length];
+                    } else {
+                        const photos = particleSystem.filter(p => p.type === 'PHOTO');
+                        STATE.focusTarget = photos.length ? photos[(++STATE.currentPhotoIndex)%photos.length].mesh : null;
                     }
                 }
                 STATE.wasPointing = true; STATE.hasPalmCenter = false; STATE.spinVel.x *= 0.9; STATE.spinVel.y *= 0.9;
@@ -1301,20 +1596,13 @@
                     if (STATE.mode !== 'SCATTER' || !STATE.hasPalmCenter) {
                         STATE.palmCenter = {x: lm[9].x, y: lm[9].y}; STATE.hasPalmCenter = true; STATE.gestureBaseSpread = avgSpread; STATE.scatterScale = 1.0;
                     }
-                    if (STATE.mode !== 'SCATTER') {
-                        STATE.mode = 'SCATTER';
-                        updateParticleDepthTest();
-                    }
+                    STATE.mode = 'SCATTER';
                     if (STATE.gestureBaseSpread) STATE.scatterScale += (THREE.MathUtils.clamp(Math.pow(STATE.gestureBaseSpread/avgSpread, 2), 0.1, 5.0) - STATE.scatterScale) * 0.15;
                     const gain = CONFIG.gestures.sensitivity, dx = lm[9].x - STATE.palmCenter.x, dy = lm[9].y - STATE.palmCenter.y;
                     STATE.spinVel.x += (THREE.MathUtils.clamp(-dy*gain, -3, 3) - STATE.spinVel.x) * 0.2;
                     STATE.spinVel.y += (THREE.MathUtils.clamp(dx*gain, -3, 3) - STATE.spinVel.y) * 0.2;
                 } else {
-                    if (STATE.mode !== 'TREE') {
-                        STATE.mode = 'TREE';
-                        updateParticleDepthTest();
-                    }
-                    STATE.hasPalmCenter = false; STATE.scatterScale = 1.0; STATE.spinVel.x *= 0.9; STATE.spinVel.y *= 0.9;
+                    STATE.mode = 'TREE'; STATE.hasPalmCenter = false; STATE.scatterScale = 1.0; STATE.spinVel.x *= 0.9; STATE.spinVel.y *= 0.9;
                 }
             }
             
@@ -1326,32 +1614,112 @@
 
         function animate() {
             requestAnimationFrame(animate);
-            const dt = clock.getDelta();
-            STATE.time = clock.elapsedTime;
-            const inputX = STATE.hand.detected ? STATE.hand.x : 0;
+            const dt = clock.getDelta(); STATE.time = clock.elapsedTime;
+            const inputX = STATE.hand.detected ? STATE.hand.x : 0; 
 
             if (STATE.mode === 'LETTER') {
-                STATE.rotation.x = THREE.MathUtils.lerp(STATE.rotation.x, Math.PI / 4, dt * 1.5);
-                STATE.rotation.y -= 0.1 * dt;
+                STATE.rotation.x = THREE.MathUtils.lerp(STATE.rotation.x, Math.PI/4, dt * 1.5); STATE.rotation.y -= 0.1 * dt;
             } else if (STATE.mode === 'TREE') {
-                STATE.rotation.y -= 0.4 * dt;
-                STATE.rotation.x = THREE.MathUtils.lerp(STATE.rotation.x, 0.15, dt * 2.0);
+                STATE.rotation.y -= 0.4 * dt; STATE.rotation.x = THREE.MathUtils.lerp(STATE.rotation.x, 0.15, dt * 2.0);
                 mainGroup.rotation.z = THREE.MathUtils.lerp(mainGroup.rotation.z, inputX * 0.1, dt * 2);
             } else if (STATE.mode === 'SCATTER') {
-                STATE.rotation.y += STATE.spinVel.y * dt;
-                STATE.rotation.x += STATE.spinVel.x * dt;
-                if (!STATE.hand.detected) {
-                    STATE.spinVel.x *= 0.95;
-                    STATE.spinVel.y *= 0.95;
-                }
+                STATE.rotation.y += STATE.spinVel.y * dt; STATE.rotation.x += STATE.spinVel.x * dt;
+                if (!STATE.hand.detected) { STATE.spinVel.x *= 0.95; STATE.spinVel.y *= 0.95; }
             } else if (STATE.mode === 'FOCUS') {
                 _invMatrix.copy(mainGroup.matrixWorld).invert();
             }
 
-            mainGroup.rotation.y = STATE.rotation.y;
-            mainGroup.rotation.x = STATE.rotation.x;
-
-            if (hologramSystem && hologramSystem.visible) {
+            mainGroup.rotation.y = STATE.rotation.y; mainGroup.rotation.x = STATE.rotation.x; 
+            
+            if (galaxySystem && galaxySystem.visible) {
+                bgGroup.rotation.y -= 0.05 * dt;
+                
+                if (galaxySystem.userData.meteors) {
+                    const meteors = galaxySystem.userData.meteors;
+                    meteors.forEach(meteor => {
+                        meteor.userData.resetTime += dt;
+                        
+                        if (!meteor.userData.active && meteor.userData.resetTime > 2 + Math.random() * 3) {
+                            meteor.userData.active = true;
+                            meteor.userData.resetTime = 0;
+                            
+                            const angle = Math.random() * Math.PI * 2;
+                            const startRadius = 60 + Math.random() * 20;
+                            meteor.userData.startPos.set(
+                                Math.cos(angle) * startRadius,
+                                20 + Math.random() * 20,
+                                Math.sin(angle) * startRadius
+                            );
+                            
+                            const endAngle = angle + 0.5 + Math.random() * 0.5;
+                            const endRadius = 30 + Math.random() * 10;
+                            meteor.userData.endPos.set(
+                                Math.cos(endAngle) * endRadius,
+                                -10 - Math.random() * 10,
+                                Math.sin(endAngle) * endRadius
+                            );
+                            
+                            const positions = meteor.geometry.attributes.position.array;
+                            const direction = new THREE.Vector3().subVectors(meteor.userData.endPos, meteor.userData.startPos).normalize();
+                            const length = 10 + Math.random() * 20;
+                            
+                            for (let j = 0; j < 2; j++) {
+                                positions[j * 3] = meteor.userData.startPos.x;
+                                positions[j * 3 + 1] = meteor.userData.startPos.y;
+                                positions[j * 3 + 2] = meteor.userData.startPos.z;
+                            }
+                            
+                            for (let j = 2; j < 6; j++) {
+                                const t = (j - 2) / 4;
+                                positions[j * 3] = meteor.userData.startPos.x + direction.x * length * t;
+                                positions[j * 3 + 1] = meteor.userData.startPos.y + direction.y * length * t;
+                                positions[j * 3 + 2] = meteor.userData.startPos.z + direction.z * length * t;
+                            }
+                            
+                            meteor.geometry.attributes.position.needsUpdate = true;
+                            meteor.userData.progress = 0;
+                            meteor.material.opacity = 1.0;
+                        }
+                        
+                        if (meteor.userData.active) {
+                            meteor.userData.progress += dt * meteor.userData.speed;
+                            
+                            if (meteor.userData.progress >= 1) {
+                                meteor.userData.active = false;
+                                meteor.material.opacity = 0;
+                            } else {
+                                const positions = meteor.geometry.attributes.position.array;
+                                const direction = new THREE.Vector3().subVectors(meteor.userData.endPos, meteor.userData.startPos);
+                                const speed = direction.length() * meteor.userData.speed;
+                                
+                                for (let j = 0; j < 6; j++) {
+                                    const t = (j - 2) / 4;
+                                    const newPos = meteor.userData.startPos.clone().add(direction.clone().multiplyScalar(t + meteor.userData.progress));
+                                    positions[j * 3] = newPos.x;
+                                    positions[j * 3 + 1] = newPos.y;
+                                    positions[j * 3 + 2] = newPos.z;
+                                }
+                                
+                                meteor.geometry.attributes.position.needsUpdate = true;
+                                meteor.material.opacity = 1.0 - meteor.userData.progress;
+                            }
+                        }
+                    });
+                }
+            } else if (snowSystem && snowSystem.visible) {
+                const positions = snowSystem.geometry.attributes.position.array;
+                const velocities = snowSystem.geometry.attributes.velocity.array;
+                const count = CONFIG.particles.snowCount;
+                
+                for(let i=0; i<count; i++) {
+                    positions[i*3+1] -= CONFIG.particles.snowSpeed * velocities[i] * dt;
+                    if (positions[i*3+1] < -50) {
+                        positions[i*3+1] = 50;
+                    }
+                }
+                snowSystem.geometry.attributes.position.needsUpdate = true;
+                bgGroup.rotation.y -= 0.02 * dt; 
+            } else if (hologramSystem && hologramSystem.visible) {
                 const positions = hologramSystem.geometry.attributes.position.array;
                 const count = CONFIG.hologram.count;
                 const time = STATE.time;
@@ -1359,7 +1727,7 @@
                 for (let i = 0; i < hologramParticleSystem.length; i++) {
                     const particle = hologramParticleSystem[i];
                     particle.update(dt, time, STATE.mode, STATE.scatterScale);
-
+                    
                     positions[i * 3] = particle.position.x;
                     positions[i * 3 + 1] = particle.position.y;
                     positions[i * 3 + 2] = particle.position.z;
@@ -1368,58 +1736,64 @@
                 hologramSystem.rotation.y -= 0.3 * dt;
             }
 
-            if (hologramPhotoCylinderGroup && hologramPhotoCylinderGroup.visible && STATE.hologramPhotoWall) {
-                const wall = STATE.hologramPhotoWall;
-
-                if (STATE.mode === 'FOCUS' && STATE.focusTarget) {
-                    wall.isScrolling = false;
-
-                    const targetPos = new THREE.Vector3(0, 0, 12);
-                    STATE.focusTarget.position.lerp(targetPos, 6.0 * dt);
-                    STATE.focusTarget.scale.lerp(new THREE.Vector3(2.0, 2.0, 2.0), 6.0 * dt);
-                    STATE.focusTarget.lookAt(0, 0, 20);
-
-                    const photoMesh = STATE.focusTarget.children[0];
-                    if (photoMesh && photoMesh.material) {
-                        photoMesh.material.color.setScalar(0.57);
-                    }
-                } else {
-                    wall.isScrolling = true;
-
-                    if (STATE.previousFocusTarget && STATE.previousFocusTarget !== STATE.focusTarget) {
-                        const prevPhotoMesh = STATE.previousFocusTarget.children[0];
-                        if (prevPhotoMesh && prevPhotoMesh.material) {
-                            prevPhotoMesh.material.color.setScalar(1.0);
+            if (STATE.currentThemeIndex === 2) {
+                hologramParticleSystem.forEach(p => p.update(dt, STATE.time, STATE.mode, STATE.scatterScale));
+                
+                if (hologramPhotoCylinderGroup && hologramPhotoCylinderGroup.visible && STATE.hologramPhotoWall) {
+                    const wall = STATE.hologramPhotoWall;
+                    
+                    if (STATE.mode === 'FOCUS' && STATE.focusTarget) {
+                        wall.isScrolling = false;
+                        
+                        const targetPos = new THREE.Vector3(0, 0, 12);
+                        STATE.focusTarget.position.lerp(targetPos, 6.0 * dt);
+                        STATE.focusTarget.scale.lerp(new THREE.Vector3(2.0, 2.0, 2.0), 6.0 * dt);
+                        STATE.focusTarget.lookAt(0, 0, 20);
+                        
+                        const photoMesh = STATE.focusTarget.children[0];
+                        if (photoMesh && photoMesh.material) {
+                            photoMesh.material.color.setScalar(0.57);
                         }
-                    }
-                    STATE.previousFocusTarget = STATE.focusTarget;
-
-                    wall.scrollOffset += wall.wallConfig.scrollSpeed * dt;
-
-                    const arcAngle = wall.wallConfig.arcAngle;
-                    const normalizedOffset = wall.scrollOffset % arcAngle;
-
-                    wall.photos.forEach((photoGroup, index) => {
-                        const userData = photoGroup.userData;
-                        if (!userData || userData.originalAngle === undefined) return;
-
-                        let currentAngle = userData.originalAngle + normalizedOffset;
-
-                        if (currentAngle > arcAngle / 2) {
-                            currentAngle -= arcAngle;
-                        } else if (currentAngle < -arcAngle / 2) {
-                            currentAngle += arcAngle;
+                    } else {
+                        wall.isScrolling = true;
+                        
+                        if (STATE.previousFocusTarget && STATE.previousFocusTarget !== STATE.focusTarget) {
+                            const prevPhotoMesh = STATE.previousFocusTarget.children[0];
+                            if (prevPhotoMesh && prevPhotoMesh.material) {
+                                prevPhotoMesh.material.color.setScalar(1.0);
+                            }
                         }
-
-                        const x = Math.sin(currentAngle) * wall.wallConfig.radius;
-                        const z = -Math.cos(currentAngle) * wall.wallConfig.radius - wall.wallConfig.depth;
-
-                        photoGroup.position.set(x, userData.originalY, z);
-                        photoGroup.lookAt(0, userData.originalY, 0);
-                        photoGroup.scale.set(1, 1, 1);
-                        photoGroup.visible = true;
-                    });
+                        STATE.previousFocusTarget = STATE.focusTarget;
+                        
+                        wall.scrollOffset += wall.wallConfig.scrollSpeed * dt;
+                        
+                        const arcAngle = wall.wallConfig.arcAngle;
+                        const normalizedOffset = wall.scrollOffset % arcAngle;
+                        
+                        wall.photos.forEach((photoGroup, index) => {
+                            const userData = photoGroup.userData;
+                            if (!userData || userData.originalAngle === undefined) return;
+                            
+                            let currentAngle = userData.originalAngle + normalizedOffset;
+                            
+                            if (currentAngle > arcAngle / 2) {
+                                currentAngle -= arcAngle;
+                            } else if (currentAngle < -arcAngle / 2) {
+                                currentAngle += arcAngle;
+                            }
+                            
+                            const x = Math.sin(currentAngle) * wall.wallConfig.radius;
+                            const z = -Math.cos(currentAngle) * wall.wallConfig.radius - wall.wallConfig.depth;
+                            
+                            photoGroup.position.set(x, userData.originalY, z);
+                            photoGroup.lookAt(0, userData.originalY, 0);
+                            photoGroup.scale.set(1, 1, 1);
+                            photoGroup.visible = true;
+                        });
+                    }
                 }
+            } else {
+                particleSystem.forEach(p => p.update(dt, STATE.time, STATE.mode, STATE.focusTarget, (STATE.mode === 'FOCUS' ? _invMatrix : null)));
             }
             composer.render();
         }
@@ -1427,6 +1801,10 @@
         function setupEvents() {
             window.addEventListener('resize', () => { camera.aspect = window.innerWidth/window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); composer.setSize(window.innerWidth, window.innerHeight); });
             
+            const fileInput = document.getElementById('file-input');
+            document.getElementById('btn-add-photo').onclick = (e) => { e.stopPropagation(); fileInput.click(); };
+            fileInput.onchange = handleImageUpload;
+
             const musicInput = document.getElementById('music-input'), audioEl = document.getElementById('bg-music');
             document.getElementById('btn-bg-music').onclick = (e) => { e.stopPropagation(); musicInput.click(); };
             
@@ -1509,7 +1887,6 @@
         function loadDefaultMusic() {
             if (!STATE.musicData || STATE.musicData.length === 0) return;
             console.log('Loading default music:', STATE.musicData.length);
-            showStatusMessage('正在加载音乐...');
             const audioEl = document.getElementById('bg-music');
             
             function playNextMusic() {
@@ -1522,7 +1899,6 @@
                 if (playPromise !== undefined) {
                     playPromise.then(() => {
                         console.log('Music started playing successfully');
-                        showStatusMessage('音乐加载完成');
                     }).catch(error => {
                         console.warn('Failed to play music:', error);
                         setTimeout(() => {
@@ -1556,6 +1932,8 @@
                 createTextures();       
                 createMaterials(); 
                 
+                createGalaxyBackground(); 
+                createSnowBackground();
                 createHologramBackground();     
                 
                 await createParticles();      
@@ -1564,8 +1942,6 @@
                 setupLetterSystem(); 
                 
                 initMediaPipe().catch(console.warn);
-                
-                document.body.classList.add('hologram-theme');
                 
                 const loader = document.getElementById('loader');
                 if (loader) {
@@ -1577,7 +1953,9 @@
                     }, 1200);
                 }
                 
-                showStatusMessage('初始化完成', 2000);
+                if (typeof switchTheme === 'function') {
+                    switchTheme(2);
+                }
                 
                 setTimeout(() => {
                     loadDefaultPhotos();
