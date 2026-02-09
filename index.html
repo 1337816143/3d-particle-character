@@ -134,6 +134,7 @@
     
     <audio id="bg-music" loop crossorigin="anonymous"></audio>
 
+    <script src="gold-theme-texts.js"></script>
     <script src="photo-groups-config.js"></script>
 
     <script type="module">
@@ -312,7 +313,15 @@
             modelBoundingBox: null,
             modelCenter: new THREE.Vector3(),
             modelScale: 1.0,
-            hologramPhotoWall: null
+            hologramPhotoWall: null,
+            goldTheme: {
+                mode: 'figure',
+                currentTextIndex: 0,
+                isAnimating: false,
+                animationProgress: 0,
+                targetPositions: [],
+                textTimer: null
+            }
         };
 
         let scene, camera, renderer, composer, clock = new THREE.Clock();
@@ -607,7 +616,7 @@
         }
 
         function createMaterials() {
-            matLib.gold = new THREE.MeshStandardMaterial({ color: CONFIG.colors.gold, metalness: 1.0, roughness: 0.15, envMapIntensity: 2.5, emissive: 0x664400, emissiveIntensity: 0.2 });
+            matLib.gold = new THREE.MeshStandardMaterial({ color: CONFIG.colors.gold, metalness: 0.8, roughness: 0.2, emissive: 0x443300, emissiveIntensity: 0.3 });
             matLib.green = new THREE.MeshStandardMaterial({ color: CONFIG.colors.green, metalness: 0.4, roughness: 0.3, emissive: 0x001100, emissiveIntensity: 0.1 });
             matLib.red = new THREE.MeshPhysicalMaterial({ color: CONFIG.colors.red, metalness: 0.6, roughness: 0.2, clearcoat: 1.0, emissive: 0x330000, emissiveIntensity: 0.4 });
             matLib.candy = new THREE.MeshStandardMaterial({ map: caneTexture, roughness: 0.3, metalness: 0.1, emissive: 0x222222 });
@@ -680,6 +689,20 @@
                         target = _targetVec;
                         lerpSpeed = 6.0; this.mesh.lookAt(camera.position); s = this.baseScale * 5.0;
                     } else { target = this.posScatter; s = 0.01; }
+                } else if (STATE.currentThemeIndex === 2 && STATE.goldTheme.mode !== 'figure') {
+                    if (STATE.goldTheme.targetPositions && STATE.goldTheme.targetPositions.length > 0) {
+                        const particleIndex = particleSystem.indexOf(this);
+                        if (particleIndex >= 0 && particleIndex < STATE.goldTheme.targetPositions.length) {
+                            target = STATE.goldTheme.targetPositions[particleIndex];
+                            lerpSpeed = 2.0;
+                            s = this.baseScale * 0.8;
+                        } else {
+                            target = this.posScatter;
+                            s = 0.01;
+                        }
+                    } else {
+                        target = this.posTree;
+                    }
                 } else {
                     target = this.posTree;
                 }
@@ -691,8 +714,13 @@
                 }
                 this.mesh.position.lerp(_tempVec, lerpSpeed * dt);
                 this.mesh.scale.setScalar(s);
-                this.mesh.rotation.x += dt * this.speed * 0.5;
-                this.mesh.rotation.y += dt * this.speed * 0.3;
+                
+                if (STATE.currentThemeIndex === 2 && STATE.goldTheme.mode === 'text') {
+                    this.mesh.rotation.set(0, 0, 0);
+                } else {
+                    this.mesh.rotation.x += dt * this.speed * 0.5;
+                    this.mesh.rotation.y += dt * this.speed * 0.3;
+                }
                 
                 if (this.hasEmissive && !this.isDust && this.type !== 'PHOTO') {
                     const flicker = 0.7 + Math.sin(time * 3 + this.offset) * 0.3;
@@ -891,6 +919,24 @@
             const sphereGeo = new THREE.SphereGeometry(0.3, 16, 16), boxGeo = new THREE.BoxGeometry(0.25, 0.25, 0.25);
             const curve = new THREE.CatmullRomCurve3([new THREE.Vector3(0,-0.5,0), new THREE.Vector3(0,0.3,0), new THREE.Vector3(0.1,0.5,0), new THREE.Vector3(0.3,0.4,0)]);
             const candyGeo = new THREE.TubeGeometry(curve, 8, 0.08, 6, false), dustGeo = new THREE.OctahedronGeometry(0.1, 0);
+            
+            function createHeartGeometry() {
+                const heartShape = new THREE.Shape();
+                const x = 0, y = 0;
+                heartShape.moveTo(x + 0.5, y + 0.5);
+                heartShape.bezierCurveTo(x + 0.5, y + 0.5, x + 0.4, y, x, y);
+                heartShape.bezierCurveTo(x - 0.6, y, x - 0.6, y + 0.7, x - 0.6, y + 0.7);
+                heartShape.bezierCurveTo(x - 0.6, y + 1.1, x - 0.3, y + 1.54, x + 0.5, y + 1.9);
+                heartShape.bezierCurveTo(x + 1.2, y + 1.54, x + 1.6, y + 1.1, x + 1.6, y + 0.7);
+                heartShape.bezierCurveTo(x + 1.6, y + 0.7, x + 1.6, y, x + 1.0, y);
+                heartShape.bezierCurveTo(x + 0.7, y, x + 0.5, y + 0.5, x + 0.5, y + 0.5);
+                const extrudeSettings = { depth: 0.3, bevelEnabled: true, bevelSegments: 2, steps: 2, bevelSize: 0.05, bevelThickness: 0.05 };
+                const geometry = new THREE.ExtrudeGeometry(heartShape, extrudeSettings);
+                geometry.center();
+                geometry.scale(0.3, 0.3, 0.3);
+                return geometry;
+            }
+            const heartGeo = createHeartGeometry();
 
             for (let i = 0; i < CONFIG.particles.count; i++) {
                 const rand = Math.random(); let mesh, type;
@@ -912,6 +958,128 @@
             
             console.log('粒子系统创建完成，总粒子数:', particleSystem.length);
             console.log('========== 粒子系统创建完成 ==========');
+        }
+
+        function easeInOutCubic(t) {
+            return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+        }
+
+        function generateTextParticlePositions(text) {
+            const canvas = document.createElement('canvas');
+            canvas.width = GOLD_THEME_CONFIG.canvasWidth;
+            canvas.height = GOLD_THEME_CONFIG.canvasHeight;
+            const ctx = canvas.getContext('2d');
+            
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.fillStyle = '#ffffff';
+            ctx.font = `bold ${GOLD_THEME_CONFIG.fontSize}px ${GOLD_THEME_CONFIG.font}`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+            
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const positions = [];
+            const density = GOLD_THEME_CONFIG.particleDensity;
+            
+            for (let y = 0; y < canvas.height; y += Math.floor(1 / density)) {
+                for (let x = 0; x < canvas.width; x += Math.floor(1 / density)) {
+                    const index = (y * canvas.width + x) * 4;
+                    if (imageData.data[index] > 128) {
+                        const posX = (x - canvas.width / 2) * 0.02;
+                        const posY = -(y - canvas.height / 2) * 0.02;
+                        const posZ = (Math.random() - 0.5) * 0.5;
+                        positions.push(new THREE.Vector3(posX, posY, posZ));
+                    }
+                }
+            }
+            
+            return positions;
+        }
+
+        function generateSphereParticlePositions() {
+            const positions = [];
+            const radius = 3;
+            const totalParticles = particleSystem.length;
+            
+            for (let i = 0; i < totalParticles; i++) {
+                const phi = Math.acos(2 * Math.random() - 1);
+                const theta = Math.random() * Math.PI * 2;
+                const x = radius * Math.sin(phi) * Math.cos(theta);
+                const y = radius * Math.sin(phi) * Math.sin(theta);
+                const z = radius * Math.cos(phi);
+                positions.push(new THREE.Vector3(x, y, z));
+            }
+            
+            return positions;
+        }
+
+        function generateHeartParticlePositions() {
+            const positions = [];
+            const totalParticles = particleSystem.length;
+            
+            for (let i = 0; i < totalParticles; i++) {
+                const t = Math.random() * Math.PI * 2;
+                const u = Math.random() * Math.PI * 2;
+                const x = 16 * Math.pow(Math.sin(t), 3);
+                const y = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t);
+                const z = 0;
+                const scale = 0.15;
+                positions.push(new THREE.Vector3(x * scale, y * scale, z * scale + (Math.random() - 0.5) * 0.5));
+            }
+            
+            return positions;
+        }
+
+        function setGoldThemeMode(mode) {
+            if (STATE.goldTheme.isAnimating) return;
+            
+            STATE.goldTheme.mode = mode;
+            STATE.goldTheme.isAnimating = true;
+            STATE.goldTheme.animationProgress = 0;
+            
+            let targetPositions;
+            switch (mode) {
+                case 'sphere':
+                    targetPositions = generateSphereParticlePositions();
+                    break;
+                case 'heart':
+                    targetPositions = generateHeartParticlePositions();
+                    break;
+                case 'text':
+                    const text = GOLD_THEME_TEXTS[STATE.goldTheme.currentTextIndex];
+                    targetPositions = generateTextParticlePositions(text);
+                    break;
+                case 'figure':
+                default:
+                    targetPositions = null;
+                    break;
+            }
+            
+            STATE.goldTheme.targetPositions = targetPositions;
+            
+            if (mode === 'text') {
+                if (STATE.goldTheme.textTimer) clearTimeout(STATE.goldTheme.textTimer);
+                STATE.goldTheme.textTimer = setTimeout(() => {
+                    if (STATE.goldTheme.currentTextIndex < GOLD_THEME_TEXTS.length - 1) {
+                        STATE.goldTheme.currentTextIndex++;
+                        setGoldThemeMode('text');
+                    }
+                }, GOLD_THEME_CONFIG.textDisplayDuration);
+            }
+        }
+
+        function resetGoldTheme() {
+            STATE.goldTheme.mode = 'figure';
+            STATE.goldTheme.currentTextIndex = 0;
+            STATE.goldTheme.isAnimating = false;
+            STATE.goldTheme.animationProgress = 0;
+            STATE.goldTheme.targetPositions = [];
+            if (STATE.goldTheme.textTimer) {
+                clearTimeout(STATE.goldTheme.textTimer);
+                STATE.goldTheme.textTimer = null;
+            }
         }
 
         async function createHologramParticleSystem() {
@@ -1762,6 +1930,30 @@
 
             const isPointing = dIndex > 0.1 && dMiddle < dIndex*0.7 && dRing < dIndex*0.7;
             const avgSpread = (dIndex+dMiddle+dRing+dPinky)/4, isPalmOpen = avgSpread > CONFIG.gestures.palmOpenThreshold;
+            const isFist = avgSpread < CONFIG.gestures.palmOpenThreshold * 0.5;
+
+            if (STATE.currentThemeIndex === 2) {
+                if (isPalmOpen && Date.now() - STATE.gestureDebounceTimer > 1000) {
+                    if (STATE.goldTheme.mode === 'figure') {
+                        setGoldThemeMode('sphere');
+                        STATE.gestureDebounceTimer = Date.now();
+                    } else if (STATE.goldTheme.mode === 'sphere') {
+                        setGoldThemeMode('heart');
+                        STATE.gestureDebounceTimer = Date.now();
+                    } else if (STATE.goldTheme.mode === 'heart') {
+                        setGoldThemeMode('text');
+                        STATE.gestureDebounceTimer = Date.now();
+                    } else if (STATE.goldTheme.mode === 'text') {
+                        resetGoldTheme();
+                        STATE.gestureDebounceTimer = Date.now();
+                    }
+                } else if (isFist && Date.now() - STATE.gestureDebounceTimer > 1000) {
+                    if (STATE.goldTheme.mode === 'sphere') {
+                        setGoldThemeMode('heart');
+                        STATE.gestureDebounceTimer = Date.now();
+                    }
+                }
+            }
 
             if (isPointing) { 
                 STATE.mode = 'FOCUS';
