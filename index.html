@@ -1800,6 +1800,7 @@
                                 audioEl.volume = 1;
                                 audioEl.currentTime = 0;
                                 audioEl.play().catch(console.warn);
+                                STATE.currentMusicIndex = 1;
                                 STATE.birthdayMusicPlayed = true;
                             }
                         }
@@ -1813,7 +1814,9 @@
             const overlay = document.getElementById('letter-overlay'), paper = document.querySelector('.letter-paper');
             overlay.style.opacity = 0; paper.style.transform = 'translateY(20px)';
             setTimeout(() => { overlay.style.display = 'none'; }, 500);
-            STATE.spinVel.set(0,0);
+            STATE.spinVel.x = 0;
+            STATE.spinVel.y = 0;
+            STATE.birthdayMusicPlayed = false;
         }
 
         async function initMediaPipe() {
