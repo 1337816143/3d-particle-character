@@ -1399,6 +1399,8 @@
             console.log('全息环绕曲面照片墙创建完成，照片数量:', photoCount);
             console.log('========== 全息环绕曲面照片墙创建完成 ==========');
             showStatusMessageComplete('照片加载完成');
+            
+            loadDefaultMusic();
         }
 
         async function createHologramPhotoFrame(photoSrc, size, frameColor, frameOpacity, frameWidth = 0.12) {
@@ -2449,7 +2451,6 @@
                     }).catch(error => {
                         console.warn('Failed to play music:', error);
                         setTimeout(() => {
-                            STATE.currentMusicIndex = (STATE.currentMusicIndex + 1) % STATE.musicData.length;
                             playNextMusic();
                         }, 1000);
                     });
@@ -2457,7 +2458,8 @@
             }
             
             audioEl.addEventListener('ended', () => {
-                console.log('Music ended, playing next track');
+                console.log('Music ended, current index:', STATE.currentMusicIndex);
+                
                 if (STATE.currentMusicIndex === 0) {
                     STATE.currentMusicIndex = 0;
                 } else if (STATE.currentMusicIndex === 1) {
@@ -2465,6 +2467,8 @@
                 } else if (STATE.currentMusicIndex >= 2 && STATE.currentMusicIndex <= 4) {
                     STATE.currentMusicIndex = ((STATE.currentMusicIndex - 2 + 1) % 3) + 2;
                 }
+                
+                console.log('Next music index:', STATE.currentMusicIndex);
                 playNextMusic();
             });
             
