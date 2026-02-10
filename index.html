@@ -1838,6 +1838,77 @@
             await startVideoSource('camera');
         }
 
+        function stopVideoStream(videoElement) {
+            if (videoElement && videoElement.srcObject) {
+                const tracks = videoElement.srcObject.getTracks();
+                tracks.forEach(track => track.stop());
+                videoElement.srcObject = null;
+            }
+        }
+
+        function setupStreamEvents(stream, videoElement, sourceName) {
+            const tracks = stream.getTracks();
+            
+            tracks.forEach(track => {
+                track.addEventListener('ended', () => {
+                    console.warn(`${sourceName}轨道已结束:`, track.kind);
+                    handleStreamEnded(videoElement, sourceName);
+                });
+                
+                track.addEventListener('mute', () => {
+                    console.warn(`${sourceName}轨道已静音:`, track.kind);
+                });
+                
+                track.addEventListener('unmute', () => {
+                    console.log(`${sourceName}轨道已取消静音:`, track.kind);
+                });
+            });
+            
+            videoElement.addEventListener('error', (e) => {
+                console.error(`${sourceName}视频错误:`, e);
+                showStatusMessage(`${sourceName}视频错误`, false, 2000);
+            });
+        }
+
+        function handleStreamEnded(videoElement, sourceName) {
+            console.warn(`${sourceName}流已结束，尝试重新连接...`);
+            showStatusMessage(`${sourceName}已断开，正在重连...`, true, 2000);
+            
+            setTimeout(() => {
+                if (STATE.videoSourceType === 'camera' && sourceName === '摄像头') {
+                    startVideoSource('camera');
+                } else if (STATE.videoSourceType === 'screen' && sourceName === '窗口') {
+                    startVideoSource('screen');
+                } else if (STATE.videoSourceType === 'both') {
+                    startVideoSource('both');
+                }
+            }, 2000);
+        }
+
+        function checkStreamHealth() {
+            if (video && video.srcObject) {
+                const tracks = video.srcObject.getTracks();
+                const isActive = tracks.some(track => track.readyState === 'live');
+                
+                if (!isActive && STATE.videoSourceType !== 'screen') {
+                    console.warn('摄像头流已停止，尝试恢复...');
+                    handleStreamEnded(video, '摄像头');
+                }
+            }
+            
+            if (screenVideo && screenVideo.srcObject) {
+                const tracks = screenVideo.srcObject.getTracks();
+                const isActive = tracks.some(track => track.readyState === 'live');
+                
+                if (!isActive && STATE.videoSourceType !== 'camera') {
+                    console.warn('窗口流已停止，尝试恢复...');
+                    handleStreamEnded(screenVideo, '窗口');
+                }
+            }
+        }
+
+        setInterval(checkStreamHealth, 5000);
+
         async function startVideoSource(sourceType) {
             STATE.videoSourceType = sourceType;
             
@@ -1847,22 +1918,49 @@
             if (sourceType === 'camera') {
                 videoSourceText.textContent = '（摄像头）';
                 document.getElementById('screen-wrapper').style.opacity = 0;
+                
+                stopVideoStream(video);
+                
                 if (navigator.mediaDevices?.getUserMedia) {
                     try {
-                        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: {ideal: 640}, height: {ideal: 480} } });
+                        const constraints = {
+                            video: {
+                                facingMode: "user",
+                                width: { min: 320, ideal: 640, max: 1280 },
+                                height: { min: 240, ideal: 480, max: 720 }
+                            }
+                        };
+                        
+                        const stream = await navigator.mediaDevices.getUserMedia(constraints);
                         video.srcObject = stream;
+                        setupStreamEvents(stream, video, '摄像头');
                     } catch (error) {
                         console.error('摄像头启动失败:', error);
-                        showStatusMessage('摄像头启动失败', false, 2000);
+                        showStatusMessage('摄像头启动失败: ' + error.name, false, 3000);
+                        
+                        try {
+                            const fallbackStream = await navigator.mediaDevices.getUserMedia({ 
+                                video: true
+                            });
+                            video.srcObject = fallbackStream;
+                            setupStreamEvents(fallbackStream, video, '摄像头');
+                        } catch (fallbackError) {
+                            console.error('备用摄像头配置也失败:', fallbackError);
+                            showStatusMessage('摄像头启动失败，请检查权限', false, 3000);
+                        }
                     }
                 }
             } else if (sourceType === 'screen') {
                 videoSourceText.textContent = '（窗口）';
                 document.getElementById('webcam-wrapper').style.opacity = 0;
+                
+                stopVideoStream(screenVideo);
+                
                 if (navigator.mediaDevices?.getDisplayMedia) {
                     try {
                         const stream = await navigator.mediaDevices.getDisplayMedia({ video: { cursor: "always" }, audio: false });
                         screenVideo.srcObject = stream;
+                        setupStreamEvents(stream, screenVideo, '窗口');
                     } catch (error) {
                         console.error('窗口捕获失败:', error);
                         showStatusMessage('窗口捕获已取消', false, 2000);
@@ -1870,19 +1968,43 @@
                 }
             } else if (sourceType === 'both') {
                 videoSourceText.textContent = '（同时）';
+                
+                stopVideoStream(video);
+                stopVideoStream(screenVideo);
+                
                 if (navigator.mediaDevices?.getUserMedia) {
                     try {
-                        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: {ideal: 640}, height: {ideal: 480} } });
+                        const constraints = {
+                            video: {
+                                facingMode: "user",
+                                width: { min: 320, ideal: 640, max: 1280 },
+                                height: { min: 240, ideal: 480, max: 720 }
+                            }
+                        };
+                        
+                        const stream = await navigator.mediaDevices.getUserMedia(constraints);
                         video.srcObject = stream;
+                        setupStreamEvents(stream, video, '摄像头');
                     } catch (error) {
                         console.error('摄像头启动失败:', error);
-                        showStatusMessage('摄像头启动失败', false, 2000);
+                        showStatusMessage('摄像头启动失败: ' + error.name, false, 3000);
+                        
+                        try {
+                            const fallbackStream = await navigator.mediaDevices.getUserMedia({ 
+                                video: true
+                            });
+                            video.srcObject = fallbackStream;
+                            setupStreamEvents(fallbackStream, video, '摄像头');
+                        } catch (fallbackError) {
+                            console.error('备用摄像头配置也失败:', fallbackError);
+                        }
                     }
                 }
                 if (navigator.mediaDevices?.getDisplayMedia) {
                     try {
                         const stream = await navigator.mediaDevices.getDisplayMedia({ video: { cursor: "always" }, audio: false });
                         screenVideo.srcObject = stream;
+                        setupStreamEvents(stream, screenVideo, '窗口');
                     } catch (error) {
                         console.error('窗口捕获失败:', error);
                         showStatusMessage('窗口捕获已取消', false, 2000);
