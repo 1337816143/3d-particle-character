@@ -1396,24 +1396,83 @@
             curvedWall.visible = false;
             hologramPhotoCylinderGroup.add(curvedWall);
             
-            const totalArcLength = wallConfig.radius * wallConfig.arcAngle;
-            
-            const photoWidth = wallConfig.photoWidth;
             const photoHeight = wallConfig.photoHeight;
-            
-            const arcPerPhoto = photoWidth / wallConfig.radius * 0.77;
             const totalRows = wallConfig.maxRows;
-            const photosPerRow = Math.ceil(photoCount / totalRows);
             const rowHeight = photoHeight * 1.2;
             const totalHeight = totalRows * rowHeight;
             const startRowY = -totalHeight / 2 + rowHeight / 2;
             
-            const rowOffsets = [];
-            for (let r = 0; r < totalRows; r++) {
-                rowOffsets.push((r % 2 === 0 ? 0.5 : -0.5) * arcPerPhoto * 0.5);
+            console.log('========== 开始动态计算照片分组 ==========');
+            console.log('正在加载所有照片以获取尺寸信息...');
+            
+            const photoInfoList = [];
+            let loadedCount = 0;
+            
+            for (let i = 0; i < photoCount; i++) {
+                const photoSrc = shuffledPhotos[i];
+                const loader = new THREE.TextureLoader();
+                await new Promise((resolve) => {
+                    loader.load(photoSrc, (texture) => {
+                        texture.colorSpace = THREE.SRGBColorSpace;
+                        
+                        loadedCount++;
+                        showStatusMessage(`正在读取照片尺寸 ${loadedCount}/${photoCount}...`, true, 1500, true);
+                        
+                        const aspect = texture.image.width / texture.image.height;
+                        const actualPhotoWidth = photoHeight * aspect;
+                        
+                        photoInfoList.push({
+                            src: photoSrc,
+                            width: actualPhotoWidth,
+                            height: photoHeight,
+                            aspect: aspect,
+                            originalWidth: texture.image.width,
+                            originalHeight: texture.image.height
+                        });
+                        
+                        resolve();
+                    });
+                });
             }
             
-            const maxPhotos = photoCount;
+            console.log(`已读取 ${photoInfoList.length} 张照片的尺寸信息`);
+            
+            console.log('开始按宽度智能分组（贪心算法）...');
+            const sortedPhotos = [...photoInfoList].sort((a, b) => b.width - a.width);
+            
+            const rows = Array.from({ length: totalRows }, () => []);
+            const rowWidths = new Array(totalRows).fill(0);
+            
+            for (const photo of sortedPhotos) {
+                let minRow = 0;
+                let minWidth = rowWidths[0];
+                
+                for (let r = 1; r < totalRows; r++) {
+                    if (rowWidths[r] < minWidth) {
+                        minWidth = rowWidths[r];
+                        minRow = r;
+                    }
+                }
+                
+                rows[minRow].push(photo);
+                rowWidths[minRow] += photo.width;
+            }
+            
+            console.log('分组结果:');
+            rows.forEach((row, index) => {
+                const totalWidth = row.reduce((sum, photo) => sum + photo.width, 0);
+                console.log(`第 ${index + 1} 行: ${row.length} 张照片, 总宽度: ${totalWidth.toFixed(2)}`);
+            });
+            
+            const avgWidth = rowWidths.reduce((sum, width) => sum + width, 0) / totalRows;
+            const maxDeviation = Math.max(...rowWidths.map(width => Math.abs(width - avgWidth)));
+            console.log(`平均每行宽度: ${avgWidth.toFixed(2)}`);
+            console.log(`最大偏差: ${maxDeviation.toFixed(2)} (${(maxDeviation / avgWidth * 100).toFixed(1)}%)`);
+            
+            const rowOffsets = [];
+            for (let r = 0; r < totalRows; r++) {
+                rowOffsets.push((r % 2 === 0 ? 0.5 : -0.5) * 0.1);
+            }
             
             STATE.hologramPhotoWall = {
                 photos: [],
@@ -1421,29 +1480,38 @@
                 isScrolling: true,
                 wallConfig: wallConfig,
                 totalPhotos: photoCount,
-                photosPerRow: photosPerRow,
                 maxRows: totalRows,
-                arcPerPhoto: arcPerPhoto,
-                rowOffsets: rowOffsets
+                rowOffsets: rowOffsets,
+                rows: rows
             };
             
             let loadedPhotoCount = 0;
             
-            for (let i = 0; i < maxPhotos; i++) {
-                const photoIndex = i % photoCount;
-                const row = Math.floor(i / photosPerRow);
-                const col = i % photosPerRow;
-                const loader = new THREE.TextureLoader();
-                await new Promise((resolve) => {
-                    loader.load(shuffledPhotos[photoIndex], (texture) => {
+            for (let row = 0; row < totalRows; row++) {
+                const rowPhotos = rows[row];
+                const y = startRowY + row * rowHeight;
+                
+                const totalPhotoArc = rowPhotos.reduce((sum, photo) => {
+                    return sum + (photo.width / wallConfig.radius);
+                }, 0);
+                
+                const spacingCount = rowPhotos.length;
+                const spacingAngle = (wallConfig.arcAngle - totalPhotoArc) / spacingCount;
+                
+                let currentAngle = -wallConfig.arcAngle / 2;
+                
+                for (let col = 0; col < rowPhotos.length; col++) {
+                    const photoInfo = rowPhotos[col];
+                    const loader = new THREE.TextureLoader();
+                    await new Promise((resolve) => {
+                        loader.load(photoInfo.src, (texture) => {
                             texture.colorSpace = THREE.SRGBColorSpace;
                             
                             loadedPhotoCount++;
                             showStatusMessage(`正在加载照片 ${loadedPhotoCount}/${photoCount}...`, true, 1500, true);
                             
-                            const aspect = texture.image.width / texture.image.height;
                             const actualPhotoHeight = photoHeight;
-                            const actualPhotoWidth = actualPhotoHeight * aspect;
+                            const actualPhotoWidth = photoInfo.width;
                             
                             const group = new THREE.Group();
                             
@@ -1459,33 +1527,37 @@
                             photo.position.z = 0.1;
                             photo.renderOrder = 2;
                             group.add(photo);
-                        
-                        const angle = -wallConfig.arcAngle / 2 + col * arcPerPhoto + arcPerPhoto / 2 + rowOffsets[row];
-                        const x = Math.sin(angle) * wallConfig.radius;
-                        const z = -Math.cos(angle) * wallConfig.radius - wallConfig.depth;
-                        const y = startRowY + row * rowHeight;
-                        
-                        group.position.set(x, y, z);
-                        group.lookAt(0, y, 0);
-                        
-                        group.userData = {
-                            originalAngle: angle,
-                            originalX: x,
-                            originalY: y,
-                            originalZ: z,
-                            index: photoIndex,
-                            photoSrc: shuffledPhotos[photoIndex],
-                            width: actualPhotoWidth,
-                            height: actualPhotoHeight,
-                            row: row,
-                            col: col
-                        };
-                        
-                        hologramPhotoCylinderGroup.add(group);
-                        STATE.hologramPhotoWall.photos.push(group);
-                        resolve();
+                            
+                            const arcPerPhotoActual = actualPhotoWidth / wallConfig.radius;
+                            
+                            const angle = currentAngle + arcPerPhotoActual / 2 + rowOffsets[row];
+                            const x = Math.sin(angle) * wallConfig.radius;
+                            const z = -Math.cos(angle) * wallConfig.radius - wallConfig.depth;
+                            
+                            group.position.set(x, y, z);
+                            group.lookAt(0, y, 0);
+                            
+                            group.userData = {
+                                originalAngle: angle,
+                                originalX: x,
+                                originalY: y,
+                                originalZ: z,
+                                photoSrc: photoInfo.src,
+                                width: actualPhotoWidth,
+                                height: actualPhotoHeight,
+                                row: row,
+                                col: col
+                            };
+                            
+                            hologramPhotoCylinderGroup.add(group);
+                            STATE.hologramPhotoWall.photos.push(group);
+                            
+                            currentAngle += arcPerPhotoActual + spacingAngle;
+                            
+                            resolve();
+                        });
                     });
-                });
+                }
             }
             
             hologramPhotoCylinderGroup.visible = true;
