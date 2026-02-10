@@ -1271,8 +1271,6 @@
                 rows: configRows
             };
             
-            let loadedPhotoCount = 0;
-            
             for (let row = 0; row < totalRows; row++) {
                 const rowPhotos = configRows[row];
                 const y = startRowY + row * rowHeight;
@@ -1406,6 +1404,7 @@
             console.log('正在加载所有照片以获取尺寸信息...');
             
             const photoInfoList = [];
+            const textureCache = new Map();
             let loadedCount = 0;
             
             for (let i = 0; i < photoCount; i++) {
@@ -1427,7 +1426,8 @@
                             height: photoHeight,
                             aspect: aspect,
                             originalWidth: texture.image.width,
-                            originalHeight: texture.image.height
+                            originalHeight: texture.image.height,
+                            texture: texture
                         });
                         
                         resolve();
@@ -1502,61 +1502,51 @@
                 
                 for (let col = 0; col < rowPhotos.length; col++) {
                     const photoInfo = rowPhotos[col];
-                    const loader = new THREE.TextureLoader();
-                    await new Promise((resolve) => {
-                        loader.load(photoInfo.src, (texture) => {
-                            texture.colorSpace = THREE.SRGBColorSpace;
-                            
-                            loadedPhotoCount++;
-                            showStatusMessage(`正在加载照片 ${loadedPhotoCount}/${photoCount}...`, true, 1500, true);
-                            
-                            const actualPhotoHeight = photoHeight;
-                            const actualPhotoWidth = photoInfo.width;
-                            
-                            const group = new THREE.Group();
-                            
-                            const photoMat = new THREE.MeshBasicMaterial({
-                                map: texture,
-                                transparent: false,
-                                opacity: 1.0,
-                                depthWrite: true,
-                                depthTest: true,
-                                side: THREE.FrontSide
-                            });
-                            const photo = new THREE.Mesh(new THREE.PlaneGeometry(actualPhotoWidth, actualPhotoHeight), photoMat);
-                            photo.position.z = 0.1;
-                            photo.renderOrder = 2;
-                            group.add(photo);
-                            
-                            const arcPerPhotoActual = actualPhotoWidth / wallConfig.radius;
-                            
-                            const angle = currentAngle + arcPerPhotoActual / 2 + rowOffsets[row];
-                            const x = Math.sin(angle) * wallConfig.radius;
-                            const z = -Math.cos(angle) * wallConfig.radius - wallConfig.depth;
-                            
-                            group.position.set(x, y, z);
-                            group.lookAt(0, y, 0);
-                            
-                            group.userData = {
-                                originalAngle: angle,
-                                originalX: x,
-                                originalY: y,
-                                originalZ: z,
-                                photoSrc: photoInfo.src,
-                                width: actualPhotoWidth,
-                                height: actualPhotoHeight,
-                                row: row,
-                                col: col
-                            };
-                            
-                            hologramPhotoCylinderGroup.add(group);
-                            STATE.hologramPhotoWall.photos.push(group);
-                            
-                            currentAngle += arcPerPhotoActual + spacingAngle;
-                            
-                            resolve();
-                        });
+                    
+                    const group = new THREE.Group();
+                    
+                    const photoMat = new THREE.MeshBasicMaterial({
+                        map: photoInfo.texture,
+                        transparent: false,
+                        opacity: 1.0,
+                        depthWrite: true,
+                        depthTest: true,
+                        side: THREE.FrontSide
                     });
+                    
+                    const actualPhotoWidth = photoInfo.width;
+                    const actualPhotoHeight = photoInfo.height;
+                    
+                    const photo = new THREE.Mesh(new THREE.PlaneGeometry(actualPhotoWidth, actualPhotoHeight), photoMat);
+                    photo.position.z = 0.1;
+                    photo.renderOrder = 2;
+                    group.add(photo);
+                    
+                    const arcPerPhotoActual = actualPhotoWidth / wallConfig.radius;
+                    
+                    const angle = currentAngle + arcPerPhotoActual / 2 + rowOffsets[row];
+                    const x = Math.sin(angle) * wallConfig.radius;
+                    const z = -Math.cos(angle) * wallConfig.radius - wallConfig.depth;
+                    
+                    group.position.set(x, y, z);
+                    group.lookAt(0, y, 0);
+                    
+                    group.userData = {
+                        originalAngle: angle,
+                        originalX: x,
+                        originalY: y,
+                        originalZ: z,
+                        photoSrc: photoInfo.src,
+                        width: actualPhotoWidth,
+                        height: actualPhotoHeight,
+                        row: row,
+                        col: col
+                    };
+                    
+                    hologramPhotoCylinderGroup.add(group);
+                    STATE.hologramPhotoWall.photos.push(group);
+                    
+                    currentAngle += arcPerPhotoActual + spacingAngle;
                 }
             }
             
