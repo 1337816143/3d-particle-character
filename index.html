@@ -72,7 +72,7 @@
         .starry-sky-popup-btn:hover { background: rgba(212, 175, 55, 0.4); color: #fff; transform: scale(1.05); }
 
         #starry-sky-photo { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 170; background: rgba(0,0,0,0.9); display: none; align-items: center; justify-content: center; pointer-events: auto; opacity: 0; transition: opacity 1s ease; }
-        #starry-sky-image { max-width: 90%; max-height: 80%; object-fit: contain; border: 2px solid #d4af37; border-radius: 5px; box-shadow: 0 0 30px rgba(212, 175, 55, 0.3); }
+        #starry-sky-image { max-width: 90%; max-height: 80%; object-fit: contain; border: 2px solid #d4af37; border-radius: 5px; box-shadow: 0 0 30px rgba(212, 175, 55, 0.3); display: block; }
         .starry-sky-photo-text { position: absolute; bottom: 80px; left: 50%; transform: translateX(-50%); width: 80%; max-width: 800px; font-family: 'Ma Shan Zheng', cursive; font-size: clamp(16px, 2vh, 22px); line-height: 1.8; color: rgba(255, 255, 255, 0.9); text-shadow: 0 0 10px rgba(0,0,0,0.8), 0 0 20px rgba(212, 175, 55, 0.5); white-space: pre-wrap; text-align: center; background: rgba(0,0,0,0.6); padding: 20px; border-radius: 10px; border: 1px solid rgba(212, 175, 55, 0.3); }
         .starry-sky-photo-close-btn { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); padding: 12px 40px; background: rgba(212, 175, 55, 0.3); border: 1px solid #d4af37; border-radius: 5px; color: #d4af37; font-family: 'Ma Shan Zheng', cursive; font-size: 18px; cursor: pointer; transition: all 0.3s; }
         .starry-sky-photo-close-btn:hover { background: rgba(212, 175, 55, 0.5); color: #fff; transform: translateX(-50%) scale(1.05); }
@@ -1800,11 +1800,21 @@
             
             const photo = document.getElementById('starry-sky-photo');
             const text = document.getElementById('starry-sky-photo-text');
+            const image = document.getElementById('starry-sky-image');
             const audioEl = document.getElementById('bg-music');
             
             photo.style.display = 'flex';
             requestAnimationFrame(() => { photo.style.opacity = 1; });
             text.textContent = '';
+            
+            image.onload = () => {
+                console.log('星空照片加载成功');
+            };
+            
+            image.onerror = () => {
+                console.error('星空照片加载失败:', image.src);
+                alert('星空照片加载失败，请检查文件是否存在');
+            };
             
             const photoText = "小七，这是你出生那天，哈勃太空望眼镜拍到的猎户座照片。\n宇宙以星云为诗，时光以光年为尺，\n而我以余生为诺。\n生日快乐，我的整片星空。";
             let i = 0;
