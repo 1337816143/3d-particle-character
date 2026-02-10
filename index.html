@@ -91,6 +91,9 @@
                     <span>切换视频源</span>
                     <span id="video-source-text">（摄像头）</span>
                 </button>
+                <select id="camera-select" class="control-btn" style="margin-top: 5px; padding: 5px 10px;">
+                    <option value="">选择摄像头</option>
+                </select>
                 <button id="btn-bg-music" class="control-btn hidden">上传音乐</button>
                 <button id="btn-add-photo" class="control-btn hidden">上传照片</button>
                 <button id="btn-write-letter" class="control-btn hidden">上传书信</button>
@@ -1828,6 +1831,49 @@
             
             video = document.getElementById('webcam'); canvasCtx = document.getElementById('webcam-preview').getContext('2d'); drawingUtilsCamera = new DrawingUtils(canvasCtx);
             screenVideo = document.getElementById('screen'); screenCanvasCtx = document.getElementById('screen-preview').getContext('2d'); drawingUtilsScreen = new DrawingUtils(screenCanvasCtx);
+            
+            const cameraSelect = document.getElementById('camera-select');
+            if (navigator.mediaDevices?.enumerateDevices) {
+                try {
+                    const devices = await navigator.mediaDevices.enumerateDevices();
+                    const videoDevices = devices.filter(device => device.kind === 'videoinput');
+                    
+                    cameraSelect.innerHTML = '<option value="">选择摄像头</option>';
+                    videoDevices.forEach((device, index) => {
+                        const option = document.createElement('option');
+                        option.value = device.deviceId;
+                        option.textContent = device.label || `摄像头 ${index + 1}`;
+                        cameraSelect.appendChild(option);
+                    });
+                    
+                    cameraSelect.addEventListener('change', async (e) => {
+                        const selectedDeviceId = e.target.value;
+                        if (selectedDeviceId && STATE.videoSourceType === 'camera') {
+                            stopVideoStream(video);
+                            
+                            const constraints = {
+                                video: {
+                                    deviceId: { exact: selectedDeviceId },
+                                    facingMode: "user",
+                                    width: { min: 320, ideal: 640, max: 1280 },
+                                    height: { min: 240, ideal: 480, max: 720 }
+                                }
+                            };
+                            
+                            try {
+                                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                                video.srcObject = stream;
+                                setupStreamEvents(stream, video, '摄像头');
+                            } catch (error) {
+                                console.error('切换摄像头失败:', error);
+                                showStatusMessage('切换摄像头失败: ' + error.name, false, 2000);
+                            }
+                        }
+                    });
+                } catch (error) {
+                    console.error('获取摄像头列表失败:', error);
+                }
+            }
             
             video.addEventListener("loadeddata", () => { 
                 video.play(); 
