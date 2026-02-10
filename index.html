@@ -1915,6 +1915,12 @@
             const btnSwitchVideo = document.getElementById('btn-switch-video');
             const videoSourceText = document.getElementById('video-source-text');
             
+            if (!video || !screenVideo) {
+                console.error('视频元素未初始化，等待MediaPipe初始化完成');
+                showStatusMessage('视频系统初始化中，请稍后...', false, 2000);
+                return;
+            }
+            
             if (sourceType === 'camera') {
                 videoSourceText.textContent = '（摄像头）';
                 document.getElementById('screen-wrapper').style.opacity = 0;
