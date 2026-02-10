@@ -644,6 +644,14 @@
                 depthWrite: false,
                 vertexColors: true
             });
+            matLib.goldPoints = new THREE.PointsMaterial({
+                color: CONFIG.colors.gold,
+                size: 0.15,
+                transparent: true,
+                opacity: 0.8,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false
+            });
             matLib.frameHologram = new THREE.MeshBasicMaterial({ 
                 color: CONFIG.colors.hologram.primary, 
                 transparent: true, 
@@ -1562,7 +1570,7 @@
                         if (group.children[0]) group.children[0].material = matLib.frameGold;
                         if (group.children[2]) group.children[2].visible = false;
                     } else {
-                        p.mesh.material = matLib.goldParticle;
+                        p.mesh.material = matLib.goldPoints;
                     }
                 });
             } else if (isHologram) {
