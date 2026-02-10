@@ -1254,7 +1254,7 @@
                 const y = startRowY + row * rowHeight;
                 
                 const totalPhotoArc = rowPhotos.reduce((sum, photo) => {
-                    return sum + (photo.width / wallConfig.radius);
+                    return sum + (photo.adjustedWidth / wallConfig.radius);
                 }, 0);
                 
                 const spacingCount = rowPhotos.length;
@@ -1273,7 +1273,7 @@
                             showStatusMessage(`正在加载照片 ${loadedPhotoCount}/${photoCount}...`, true, 1500, true);
                             
                             const actualPhotoHeight = photoHeight;
-                            const actualPhotoWidth = photoInfo.width;
+                            const actualPhotoWidth = photoInfo.adjustedWidth;
                             
                             const group = new THREE.Group();
                             
