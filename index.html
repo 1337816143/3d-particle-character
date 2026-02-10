@@ -731,7 +731,7 @@
                     this.mesh.rotation.y += dt * this.speed * 0.3;
                 }
                 
-                if (this.hasEmissive && !this.isDust && this.type !== 'PHOTO') {
+                if (this.hasEmissive && !this.isDust && this.type !== 'PHOTO' && this.mesh.material.emissive) {
                     const flicker = 0.7 + Math.sin(time * 3 + this.offset) * 0.3;
                     this.mesh.material.emissive.copy(this.baseEmissive).multiplyScalar(flicker);
                 }
