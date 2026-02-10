@@ -152,7 +152,7 @@
 
     <div id="starry-sky-photo">
         <div class="starry-sky-close-btn" id="btn-close-starry-photo">×</div>
-        <img id="starry-sky-image" src="M.jpg" alt="星空照片">
+        <img id="starry-sky-image" alt="星空照片">
         <div class="starry-sky-photo-text" id="starry-sky-photo-text"></div>
         <button class="starry-sky-photo-close-btn" id="btn-close-starry-photo-bottom">关闭</button>
     </div>
@@ -1815,6 +1815,8 @@
                 console.error('星空照片加载失败:', image.src);
                 alert('星空照片加载失败，请检查文件是否存在');
             };
+            
+            image.src = 'M.jpg';
             
             const photoText = "小七，这是你出生那天，哈勃太空望眼镜拍到的猎户座照片。\n宇宙以星云为诗，时光以光年为尺，\n而我以余生为诺。\n生日快乐，我的整片星空。";
             let i = 0;
