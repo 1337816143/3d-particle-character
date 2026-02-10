@@ -689,7 +689,7 @@
                         target = _targetVec;
                         lerpSpeed = 6.0; this.mesh.lookAt(camera.position); s = this.baseScale * 5.0;
                     } else { target = this.posScatter; s = 0.01; }
-                } else if (STATE.currentThemeIndex === 2 && STATE.goldTheme.mode !== 'figure') {
+                } else if (STATE.currentThemeIndex === 0 && STATE.goldTheme.mode !== 'figure') {
                     if (STATE.goldTheme.targetPositions && STATE.goldTheme.targetPositions.length > 0) {
                         const particleIndex = particleSystem.indexOf(this);
                         if (particleIndex >= 0 && particleIndex < STATE.goldTheme.targetPositions.length) {
@@ -712,10 +712,18 @@
                     _tempVec.y += Math.sin(time * this.speed + this.offset) * 0.15; 
                     _tempVec.x += Math.cos(time * 0.5 * this.speed + this.offset) * 0.1; 
                 }
-                this.mesh.position.lerp(_tempVec, lerpSpeed * dt);
+                
+                if (STATE.currentThemeIndex === 0 && STATE.goldTheme.mode !== 'figure') {
+                    const easedProgress = easeInOutCubic(STATE.goldTheme.animationProgress);
+                    _tempVec.lerp(this.mesh.position, 1 - easedProgress);
+                    this.mesh.position.lerp(_tempVec, lerpSpeed * dt);
+                } else {
+                    this.mesh.position.lerp(_tempVec, lerpSpeed * dt);
+                }
+                
                 this.mesh.scale.setScalar(s);
                 
-                if (STATE.currentThemeIndex === 2 && STATE.goldTheme.mode === 'text') {
+                if (STATE.currentThemeIndex === 0 && STATE.goldTheme.mode === 'text') {
                     this.mesh.rotation.set(0, 0, 0);
                 } else {
                     this.mesh.rotation.x += dt * this.speed * 0.5;
@@ -1535,13 +1543,17 @@
 
             renderer.toneMappingExposure = isIce ? 0.6 : 1.0;
 
-            if (galaxySystem) galaxySystem.visible = isGold;
+            if (galaxySystem) galaxySystem.visible = false;
             if (snowSystem) snowSystem.visible = isIce;
             if (hologramSystem) hologramSystem.visible = isHologram;
             if (hologramBackgroundSystem) hologramBackgroundSystem.visible = isHologram;
             if (hologramPhotoCylinderGroup) hologramPhotoCylinderGroup.visible = isHologram;
 
-            if (isHologram) {
+            if (isGold) {
+                particleSystem.forEach(p => {
+                    p.mesh.visible = true;
+                });
+            } else if (isHologram) {
                 particleSystem.forEach(p => {
                     p.mesh.visible = false;
                 });
@@ -1932,7 +1944,7 @@
             const avgSpread = (dIndex+dMiddle+dRing+dPinky)/4, isPalmOpen = avgSpread > CONFIG.gestures.palmOpenThreshold;
             const isFist = avgSpread < CONFIG.gestures.palmOpenThreshold * 0.5;
 
-            if (STATE.currentThemeIndex === 2) {
+            if (STATE.currentThemeIndex === 0) {
                 if (isPalmOpen && Date.now() - STATE.gestureDebounceTimer > 1000) {
                     if (STATE.goldTheme.mode === 'figure') {
                         setGoldThemeMode('sphere');
@@ -2193,6 +2205,15 @@
             } else {
                 particleSystem.forEach(p => p.update(dt, STATE.time, STATE.mode, STATE.focusTarget, (STATE.mode === 'FOCUS' ? _invMatrix : null)));
             }
+
+            if (STATE.currentThemeIndex === 0 && STATE.goldTheme.isAnimating) {
+                STATE.goldTheme.animationProgress += dt * 0.5;
+                if (STATE.goldTheme.animationProgress >= 1) {
+                    STATE.goldTheme.animationProgress = 1;
+                    STATE.goldTheme.isAnimating = false;
+                }
+            }
+
             composer.render();
         }
 
