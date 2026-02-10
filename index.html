@@ -132,7 +132,7 @@
         <canvas id="screen-preview" style="width: 100%; height: 100%; transform: scaleX(-1);"></canvas>
     </div>
     
-    <audio id="bg-music" loop crossorigin="anonymous"></audio>
+    <audio id="bg-music" crossorigin="anonymous"></audio>
 
     <script src="gold-theme-texts.js"></script>
     <script src="photo-groups-config.js"></script>
@@ -202,7 +202,7 @@
             wasPointing: false, palmCenter: { x: 0.5, y: 0.5 }, hasPalmCenter: false,
             videoSourceType: 'camera',
             letterContent: "敢对我竖中指？！\n嗯？？（靠近）\n很好...（盯...）（意犹未尽）\n在这个特别的时刻，\n我想告诉你，\n你是我眼中的万千星河...！！！", 
-            letterTyper: null, letterStartTimer: null, letterLastTriggerTime: 0,
+            letterTyper: null, letterStartTimer: null, letterLastTriggerTime: 0, birthdayMusicPlayed: false,
             musicData: [
                 'music/Ether.mp3',
                 'music/生日快乐小七.m4a',
@@ -1772,7 +1772,6 @@
             STATE.mode = 'LETTER';
             
             const audioEl = document.getElementById('bg-music');
-            audioEl.pause();
             
             const overlay = document.getElementById('letter-overlay'), paper = document.querySelector('.letter-paper'), display = document.getElementById('letter-content-display');
             overlay.style.display = 'flex'; requestAnimationFrame(() => { overlay.style.opacity = 1; paper.style.transform = 'translateY(0)'; });
@@ -1788,11 +1787,25 @@
             
             setTimeout(() => {
                 if (STATE.mode === 'LETTER') {
-                    audioEl.src = 'music/生日快乐小七.m4a';
-                    audioEl.currentTime = 0;
-                    audioEl.play().catch(console.warn);
+                    const fadeOutInterval = setInterval(() => {
+                        if (audioEl.volume > 0.1) {
+                            audioEl.volume -= 0.1;
+                        } else {
+                            clearInterval(fadeOutInterval);
+                            audioEl.volume = 0;
+                            audioEl.pause();
+                            
+                            if (!STATE.birthdayMusicPlayed) {
+                                audioEl.src = 'music/生日快乐小七.m4a';
+                                audioEl.volume = 1;
+                                audioEl.currentTime = 0;
+                                audioEl.play().catch(console.warn);
+                                STATE.birthdayMusicPlayed = true;
+                            }
+                        }
+                    }, 200);
                 }
-            }, 3000);
+            }, 5000);
         }
 
         function exitLetterMode() {
@@ -2490,20 +2503,24 @@
             
             audioEl.addEventListener('ended', () => {
                 console.log('Music ended, playing next track');
-                if (STATE.currentMusicIndex === 1) {
+                if (STATE.currentMusicIndex === 0) {
+                    STATE.currentMusicIndex = 0;
+                } else if (STATE.currentMusicIndex === 1) {
                     STATE.currentMusicIndex = 2;
-                } else {
-                    STATE.currentMusicIndex = (STATE.currentMusicIndex + 1) % STATE.musicData.length;
+                } else if (STATE.currentMusicIndex >= 2 && STATE.currentMusicIndex <= 4) {
+                    STATE.currentMusicIndex = ((STATE.currentMusicIndex - 2 + 1) % 3) + 2;
                 }
                 playNextMusic();
             });
             
             audioEl.addEventListener('error', (e) => {
                 console.warn('Audio error:', e);
-                if (STATE.currentMusicIndex === 1) {
+                if (STATE.currentMusicIndex === 0) {
+                    STATE.currentMusicIndex = 0;
+                } else if (STATE.currentMusicIndex === 1) {
                     STATE.currentMusicIndex = 2;
-                } else {
-                    STATE.currentMusicIndex = (STATE.currentMusicIndex + 1) % STATE.musicData.length;
+                } else if (STATE.currentMusicIndex >= 2 && STATE.currentMusicIndex <= 4) {
+                    STATE.currentMusicIndex = ((STATE.currentMusicIndex - 2 + 1) % 3) + 2;
                 }
                 setTimeout(() => playNextMusic(), 1000);
             });
