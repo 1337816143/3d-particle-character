@@ -205,8 +205,10 @@
             letterTyper: null, letterStartTimer: null, letterLastTriggerTime: 0,
             musicData: [
                 'music/Ether.mp3',
-                'music/夏日烟花祭.flac',
-                'music/夜空中最亮的星.mp3'
+                'music/生日快乐小七.m4a',
+                'music/花_太阳_彩虹_你.mp3',
+                'music/夜空中最亮的星.mp3',
+                'music/光年之外.mp3'
             ],
             photos: [
                 'photos/77 (1).jpg',
@@ -1768,6 +1770,10 @@
         function enterLetterMode() {
             if (STATE.mode === 'LETTER') return;
             STATE.mode = 'LETTER';
+            
+            const audioEl = document.getElementById('bg-music');
+            audioEl.pause();
+            
             const overlay = document.getElementById('letter-overlay'), paper = document.querySelector('.letter-paper'), display = document.getElementById('letter-content-display');
             overlay.style.display = 'flex'; requestAnimationFrame(() => { overlay.style.opacity = 1; paper.style.transform = 'translateY(0)'; });
             display.textContent = ''; display.classList.remove('cursor');
@@ -1779,6 +1785,14 @@
                 else display.classList.remove('cursor');
             };
             STATE.letterStartTimer = setTimeout(() => { if(STATE.mode==='LETTER') { display.classList.add('cursor'); typeWriter(); } }, 2000);
+            
+            setTimeout(() => {
+                if (STATE.mode === 'LETTER') {
+                    audioEl.src = 'music/生日快乐小七.m4a';
+                    audioEl.currentTime = 0;
+                    audioEl.play().catch(console.warn);
+                }
+            }, 3000);
         }
 
         function exitLetterMode() {
@@ -2348,13 +2362,21 @@
             
             audioEl.addEventListener('ended', () => {
                 console.log('Music ended, playing next track');
-                STATE.currentMusicIndex = (STATE.currentMusicIndex + 1) % STATE.musicData.length;
+                if (STATE.currentMusicIndex === 1) {
+                    STATE.currentMusicIndex = 2;
+                } else {
+                    STATE.currentMusicIndex = (STATE.currentMusicIndex + 1) % STATE.musicData.length;
+                }
                 playNextMusic();
             });
             
             audioEl.addEventListener('error', (e) => {
                 console.warn('Audio error:', e);
-                STATE.currentMusicIndex = (STATE.currentMusicIndex + 1) % STATE.musicData.length;
+                if (STATE.currentMusicIndex === 1) {
+                    STATE.currentMusicIndex = 2;
+                } else {
+                    STATE.currentMusicIndex = (STATE.currentMusicIndex + 1) % STATE.musicData.length;
+                }
                 setTimeout(() => playNextMusic(), 1000);
             });
             
