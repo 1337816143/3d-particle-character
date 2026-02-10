@@ -646,7 +646,7 @@
             });
             matLib.goldPoints = new THREE.PointsMaterial({
                 color: CONFIG.colors.gold,
-                size: 0.15,
+                size: 0.2,
                 transparent: true,
                 opacity: 0.8,
                 blending: THREE.AdditiveBlending,
@@ -1562,14 +1562,15 @@
 
             if (isGold) {
                 particleSystem.forEach(p => {
-                    p.mesh.visible = true;
-                    if (p.isDust) return;
+                    if (p.isDust) {
+                        p.mesh.visible = true;
+                        return;
+                    }
                     
                     if (p.type === 'PHOTO') {
-                        const group = p.mesh;
-                        if (group.children[0]) group.children[0].material = matLib.frameGold;
-                        if (group.children[2]) group.children[2].visible = false;
+                        p.mesh.visible = false;
                     } else {
+                        p.mesh.visible = true;
                         p.mesh.material = matLib.goldPoints;
                     }
                 });
