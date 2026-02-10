@@ -617,6 +617,7 @@
 
         function createMaterials() {
             matLib.gold = new THREE.MeshStandardMaterial({ color: CONFIG.colors.gold, metalness: 0.8, roughness: 0.2, emissive: 0x443300, emissiveIntensity: 0.3 });
+            matLib.goldParticle = new THREE.MeshBasicMaterial({ color: CONFIG.colors.gold, transparent: true, opacity: 0.8 });
             matLib.green = new THREE.MeshStandardMaterial({ color: CONFIG.colors.green, metalness: 0.4, roughness: 0.3, emissive: 0x001100, emissiveIntensity: 0.1 });
             matLib.red = new THREE.MeshPhysicalMaterial({ color: CONFIG.colors.red, metalness: 0.6, roughness: 0.2, clearcoat: 1.0, emissive: 0x330000, emissiveIntensity: 0.4 });
             matLib.candy = new THREE.MeshStandardMaterial({ map: caneTexture, roughness: 0.3, metalness: 0.1, emissive: 0x222222 });
@@ -995,8 +996,8 @@
                 for (let x = 0; x < canvas.width; x += Math.floor(1 / density)) {
                     const index = (y * canvas.width + x) * 4;
                     if (imageData.data[index] > 128) {
-                        const posX = (x - canvas.width / 2) * 0.02;
-                        const posY = -(y - canvas.height / 2) * 0.02;
+                        const posX = (x - canvas.width / 2) * 0.05;
+                        const posY = -(y - canvas.height / 2) * 0.05;
                         const posZ = (Math.random() - 0.5) * 0.5;
                         positions.push(new THREE.Vector3(posX, posY, posZ));
                     }
@@ -1026,15 +1027,17 @@
         function generateHeartParticlePositions() {
             const positions = [];
             const totalParticles = particleSystem.length;
+            const scale = 0.4;
             
             for (let i = 0; i < totalParticles; i++) {
                 const t = Math.random() * Math.PI * 2;
-                const u = Math.random() * Math.PI * 2;
-                const x = 16 * Math.pow(Math.sin(t), 3);
-                const y = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t);
-                const z = 0;
-                const scale = 0.15;
-                positions.push(new THREE.Vector3(x * scale, y * scale, z * scale + (Math.random() - 0.5) * 0.5));
+                const u = Math.random() * Math.PI;
+                
+                const x = 16 * Math.pow(Math.sin(u), 3);
+                const y = 13 * Math.cos(u) - 5 * Math.cos(2 * u) - 2 * Math.cos(3 * u) - Math.cos(4 * u);
+                const z = 4 * Math.sin(u) * Math.cos(u);
+                
+                positions.push(new THREE.Vector3(x * scale, y * scale, z * scale));
             }
             
             return positions;
@@ -1552,6 +1555,15 @@
             if (isGold) {
                 particleSystem.forEach(p => {
                     p.mesh.visible = true;
+                    if (p.isDust) return;
+                    
+                    if (p.type === 'PHOTO') {
+                        const group = p.mesh;
+                        if (group.children[0]) group.children[0].material = matLib.frameGold;
+                        if (group.children[2]) group.children[2].visible = false;
+                    } else {
+                        p.mesh.material = matLib.goldParticle;
+                    }
                 });
             } else if (isHologram) {
                 particleSystem.forEach(p => {
@@ -1570,29 +1582,21 @@
                     if (p.type === 'PHOTO') {
                         const group = p.mesh;
                         if (group.children[0]) {
-                            if (isGold) group.children[0].material = matLib.frameGold;
-                            else if (isIce) group.children[0].material = matLib.ice;
+                            group.children[0].material = matLib.ice;
                         }
                         if (group.children[1]) {
                             group.children[1].material.transparent = false;
                             group.children[1].material.opacity = 1.0;
                             group.children[1].material.color.setHex(0xffffff);
                         }
-                        if (group.children[2]) group.children[2].visible = !isGold;
+                        if (group.children[2]) group.children[2].visible = true;
                         return;
                     }
 
                     let newMat;
-                    if (isGold) {
-                        if(p.type.includes('GOLD')) newMat = matLib.gold;
-                        else if(p.type === 'BOX') newMat = matLib.green;
-                        else if(p.type === 'RED') newMat = matLib.red;
-                        else if(p.type === 'CANE') newMat = matLib.candy;
-                    } else if (isIce) {
-                        if(p.type.includes('GOLD') || p.type === 'BOX') newMat = matLib.ice; 
-                        else if(p.type === 'RED') newMat = matLib.snow;  
-                        else if(p.type === 'CANE') newMat = matLib.ice; 
-                    }
+                    if (p.type.includes('GOLD') || p.type === 'BOX') newMat = matLib.ice; 
+                    else if (p.type === 'RED') newMat = matLib.snow;  
+                    else if (p.type === 'CANE') newMat = matLib.ice;
                     if (newMat) p.mesh.material = newMat;
                 });
             }
