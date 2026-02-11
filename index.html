@@ -46,6 +46,8 @@
         #webcam-wrapper { position: absolute; bottom: 20px; right: 20px; opacity: 0; pointer-events: none; border: 1px solid rgba(212, 175, 55, 0.5); border-radius: 4px; background: #000; z-index: 50; display: flex; transition: opacity 0.5s; }
         #webcam { display: none; }
         #webcam-preview { width: 100%; height: 100%; transform: scaleX(-1); }
+        .preview-toggle-btn { position: absolute; bottom: 0; left: 0; width: 24px; height: 24px; border: 1px solid rgba(212, 175, 55, 0.5); border-radius: 50%; background: rgba(0, 0, 0, 0.8); color: #d4af37; font-size: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.3s; z-index: 51; opacity: 1 !important; pointer-events: auto; }
+        .preview-toggle-btn:hover { background: rgba(212, 175, 55, 0.3); transform: scale(1.1); }
 
         #letter-editor-modal { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 80%; max-width: 500px; background: rgba(10, 10, 10, 0.95); border: 1px solid #d4af37; border-radius: 10px; padding: 20px; z-index: 200; display: none; flex-direction: column; gap: 15px; pointer-events: auto; }
         #letter-editor-modal h3 { color: #d4af37; margin: 0; text-align: center; }
@@ -158,11 +160,13 @@
     </div>
 
     <div id="webcam-wrapper">
+        <button class="preview-toggle-btn" id="webcam-toggle-btn">👁️</button>
         <video id="webcam" autoplay playsinline webkit-playsinline></video>
         <canvas id="webcam-preview"></canvas>
     </div>
     
     <div id="screen-wrapper" style="position: absolute; bottom: 20px; right: 150px; opacity: 0; pointer-events: none; border: 1px solid rgba(212, 175, 55, 0.5); border-radius: 4px; background: #000; z-index: 50; display: flex; transition: opacity 0.5s;">
+        <button class="preview-toggle-btn" id="screen-toggle-btn">👁️</button>
         <video id="screen" autoplay playsinline webkit-playsinline style="display: none;"></video>
         <canvas id="screen-preview" style="width: 100%; height: 100%; transform: scaleX(-1);"></canvas>
     </div>
@@ -1929,6 +1933,36 @@
             });
             
             await startVideoSource('camera');
+            
+            const webcamWrapper = document.getElementById('webcam-wrapper');
+            const webcamToggleBtn = document.getElementById('webcam-toggle-btn');
+            let webcamVisible = true;
+            
+            webcamToggleBtn.onclick = () => {
+                webcamVisible = !webcamVisible;
+                if (webcamVisible) {
+                    webcamWrapper.style.opacity = 1;
+                    webcamWrapper.style.pointerEvents = 'auto';
+                } else {
+                    webcamWrapper.style.opacity = 0;
+                    webcamWrapper.style.pointerEvents = 'none';
+                }
+            };
+            
+            const screenWrapper = document.getElementById('screen-wrapper');
+            const screenToggleBtn = document.getElementById('screen-toggle-btn');
+            let screenVisible = true;
+            
+            screenToggleBtn.onclick = () => {
+                screenVisible = !screenVisible;
+                if (screenVisible) {
+                    screenWrapper.style.opacity = 1;
+                    screenWrapper.style.pointerEvents = 'auto';
+                } else {
+                    screenWrapper.style.opacity = 0;
+                    screenWrapper.style.pointerEvents = 'none';
+                }
+            };
         }
 
         function stopVideoStream(videoElement) {
